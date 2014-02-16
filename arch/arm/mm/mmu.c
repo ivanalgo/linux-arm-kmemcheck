@@ -766,10 +766,12 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 		 * Try a section mapping - addr, next and phys must all be
 		 * aligned to a section boundary.
 		 */
-		if (!kmemcheck_enabled && type->prot_sect &&
+#ifdef CONFIG_KMEMCHECK
+		if (type->prot_sect &&
 				((addr | next | phys) & ~SECTION_MASK) == 0) {
 			__map_init_section(pmd, addr, next, phys, type);
 		} else 
+#endif
 		{
 			alloc_init_pte(pmd, addr, next,
 						__phys_to_pfn(phys), type);
