@@ -121,6 +121,8 @@ static struct cachepolicy cache_policies[] __initdata = {
 unsigned long page_2m = 0;
 unsigned long page_4k = 0;
 
+extern int kmemcheck_enabled;
+
 #ifdef CONFIG_PROC_FS
 void arch_report_meminfo(struct seq_file *m)
 {
@@ -760,16 +762,14 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 		 */
 		next = pmd_addr_end(addr, end);
 
-#ifndef CONFIG_KMEMCHECK
 		/*
 		 * Try a section mapping - addr, next and phys must all be
 		 * aligned to a section boundary.
 		 */
-		if (type->prot_sect &&
+		if (!kmemcheck_enabled && type->prot_sect &&
 				((addr | next | phys) & ~SECTION_MASK) == 0) {
 			__map_init_section(pmd, addr, next, phys, type);
 		} else 
-#endif
 		{
 			alloc_init_pte(pmd, addr, next,
 						__phys_to_pfn(phys), type);
@@ -1513,3 +1513,4 @@ void __init paging_init(const struct machine_desc *mdesc)
 	empty_zero_page = virt_to_page(zero_page);
 	__flush_dcache_page(NULL, empty_zero_page);
 }
+

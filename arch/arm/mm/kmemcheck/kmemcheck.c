@@ -27,6 +27,8 @@
 #include <asm/tlbflush.h>
 
 #include "shadow.h"
+#include "pte.h"
+#include "error.h"
 
 #ifdef CONFIG_KMEMCHECK_DISABLED_BY_DEFAULT
 #  define KMEMCHECK_ENABLED 0
@@ -94,7 +96,7 @@ int kmemcheck_show_addr(unsigned long address)
 #if 0
 	set_pte(pte, __pte(pte_val(*pte) | _PAGE_PRESENT));
 #endif
-	__flush_tlb_one(address);
+	flush_tlb_kernel_range(address, address + sizeof(unsigned long));
 	return 1;
 }
 
@@ -109,7 +111,7 @@ int kmemcheck_hide_addr(unsigned long address)
 #if 0
 	set_pte(pte, __pte(pte_val(*pte) & ~_PAGE_PRESENT));
 #endif
-	__flush_tlb_one(address);
+	flush_tlb_kernel_range(address, address + sizeof(unsigned long));	
 	return 1;
 }
 
@@ -280,7 +282,7 @@ void kmemcheck_show_pages(struct page *p, unsigned int n)
 		set_pte(pte, __pte(pte_val(*pte) | _PAGE_PRESENT));
 		set_pte(pte, __pte(pte_val(*pte) & ~_PAGE_HIDDEN));
 #endif
-		__flush_tlb_one(address);
+		flush_tlb_kernel_range(address, address + sizeof(unsigned long));
 	}
 }
 
@@ -308,7 +310,7 @@ void kmemcheck_hide_pages(struct page *p, unsigned int n)
 		set_pte(pte, __pte(pte_val(*pte) & ~_PAGE_PRESENT));
 		set_pte(pte, __pte(pte_val(*pte) | _PAGE_HIDDEN));
 #endif
-		__flush_tlb_one(address);
+		flush_tlb_kernel_range(address, address + sizeof(unsigned long));
 	}
 }
 
@@ -528,9 +530,7 @@ enum kmemcheck_method {
 static void kmemcheck_access(struct pt_regs *regs,
 	unsigned long fallback_address, enum kmemcheck_method fallback_method)
 {
-	const uint8_t *insn;
-	const uint8_t *insn_primary;
-	unsigned int size;
+	unsigned int size = -1;
 
 	struct kmemcheck_context *data = &__get_cpu_var(kmemcheck_context);
 
@@ -663,3 +663,6 @@ bool kmemcheck_trap(struct pt_regs *regs)
 	kmemcheck_hide(regs);
 	return true;
 }
+
+
+
