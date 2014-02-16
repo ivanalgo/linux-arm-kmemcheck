@@ -262,6 +262,11 @@ static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
 	return pte;
 }
 
+static inline int pte_hidden(pte_t pte)
+{
+        return pte_val(pte) & L_PTE_HIDDEN;
+}
+
 /*
  * Encode and decode a swap entry.  Swap entries are stored in the Linux
  * page tables as follows:
