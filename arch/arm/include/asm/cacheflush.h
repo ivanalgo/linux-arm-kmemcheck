@@ -489,4 +489,6 @@ int set_memory_nx(unsigned long addr, int numpages);
 
 void flush_uprobe_xol_access(struct page *page, unsigned long uaddr,
 			     void *kaddr, unsigned long len);
+
+void mark_rodata_ro(void);
 #endif

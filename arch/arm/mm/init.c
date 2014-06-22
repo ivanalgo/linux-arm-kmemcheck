@@ -649,3 +649,15 @@ static int __init keepinitrd_setup(char *__unused)
 
 __setup("keepinitrd", keepinitrd_setup);
 #endif
+
+void mark_rodata_ro(void)
+{
+        unsigned long start = PFN_ALIGN(_text);
+        unsigned long size = PFN_ALIGN(_etext) - start;
+
+        set_memory_ro(start, size >> PAGE_SHIFT);
+        printk(KERN_INFO "Write protecting the kernel text: %luk\n",
+                size >> 10);
+
+        //kernel_set_to_readonly = 1;
+}
