@@ -1849,6 +1849,9 @@ static int apply_to_pte_range(struct mm_struct *mm, pmd_t *pmd,
 		return -ENOMEM;
 
 	BUG_ON(pmd_huge(*pmd));
+	if (addr & 0xfffff == 0) {
+		printk(KERN_ERR "addr = %08lx, *pmd = %08lx\n", addr, *pmd);	
+	}
 
 	arch_enter_lazy_mmu_mode();
 
