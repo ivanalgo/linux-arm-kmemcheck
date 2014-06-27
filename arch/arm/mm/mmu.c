@@ -1541,22 +1541,29 @@ void __init paging_init(const struct machine_desc *mdesc)
 int arch_split_huge_pmd(pmd_t *pmd, struct mm_struct *mm)
 {
 	pte_t *pte, *next;
-	struct page *page = pmd_page(*pmd);
+	unsigned long pfn = pmd_pfn(*pmd);
 	//unsigned long pfn = pmd_pfn(*pmd);
 	int i = 0;
 
 	printk(KERN_ERR "mem_types[MT_MEMORY_RWX].prot_sect = %08lx\n", mem_types[MT_MEMORY_RWX].prot_sect);
-	pte = pte_alloc_one_kernel(mm,  0); // FIXME??? 0?? */
+	pte = pte_alloc_one_kernel(&init_mm,  0); // FIXME??? 0?? */
 	if (!pte)
 		return -ENOMEM;
 
+	printk(KERN_ERR "*pmd = %08lx\n", pmd_val(*pmd));
+
 	next = pte;
 	do {
-		set_pte_ext(next, mk_pte(page, mem_types[MT_MEMORY_RWX].prot_pte), 0);	
-	} while(next++, page++, ++i != PTRS_PER_PTE);
+		set_pte_ext(next, pfn_pte(pfn, mem_types[MT_MEMORY_RWX].prot_pte), 0);	
+		if (next == pte)
+			printk(KERN_ERR "*pte = %08lx\n", pte_val(*pte));
+	} while(next++, pfn++, ++i != PTRS_PER_PTE);
 
 		printk(KERN_ERR "Yongting set_pte_ext OK!\n");
-	 __pmd_populate(pmd, __pa(pte), mem_types[MT_MEMORY_RWX].prot_sect);
+	 pmd_populate_kernel(&init_mm, pmd, pte);
+	printk(KERN_ERR "*pmd = %08lx\n", pmd_val(*pmd));
+	printk(KERN_ERR "Yongting pmd populate ok!\n");
+	printk(KERN_ERR "Yongting pmd populate ok!\n");
 	printk(KERN_ERR "Yongting pmd populate ok!\n");
 
 	return 0;

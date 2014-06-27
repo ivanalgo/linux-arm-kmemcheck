@@ -189,7 +189,8 @@ static inline pte_t *pmd_page_vaddr(pmd_t pmd)
 	return __va(pmd_val(pmd) & PHYS_MASK & (s32)PAGE_MASK);
 }
 
-#define pmd_page(pmd)		pfn_to_page(__phys_to_pfn(pmd_val(pmd) & PHYS_MASK))
+#define pmd_pfn(pmd)		__phys_to_pfn(pmd_val(pmd) & PHYS_MASK)
+#define pmd_page(pmd)		pfn_to_page(pmd_pfn(pmd))
 
 #ifndef CONFIG_HIGHPTE
 #define __pte_map(pmd)		pmd_page_vaddr(*(pmd))
