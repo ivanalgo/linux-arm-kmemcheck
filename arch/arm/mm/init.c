@@ -670,13 +670,13 @@ void mark_rodata_ro(void)
         unsigned long start = PFN_ALIGN(_text);
         unsigned long size = PFN_ALIGN(_etext) - start;
 
-	printk(KERN_INFO "Yongting: mark test as ro: %08lx - %08lx\n", start, start + size);
         set_memory_ro(start, size >> PAGE_SHIFT);
         printk(KERN_INFO "Write protecting the kernel text: %luk\n",
                 size >> 10);
 
 	start += size;
         size = (unsigned long)__end_rodata - start;
+	printk(KERN_ERR "start = %08lx, size = %08lx\n", start, size);
         set_memory_ro(start, size >> PAGE_SHIFT);
         printk(KERN_INFO "Write protecting the kernel read-only data: %luk\n",
                 size >> 10);
