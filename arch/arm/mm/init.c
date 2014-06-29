@@ -650,6 +650,21 @@ static int __init keepinitrd_setup(char *__unused)
 __setup("keepinitrd", keepinitrd_setup);
 #endif
 
+static void mark_nxdata_nx(void)
+{
+        /*
+         * When this called, init has already been executed and released,
+         * so everything past _etext should be NX.
+         */
+        unsigned long start = PFN_ALIGN(_etext);
+        /*
+         * This comes from is_kernel_text upper limit. Also HPAGE where used:
+         */
+        unsigned long size = (((unsigned long)__init_end + PAGE_SIZE) & PAGE_MASK) - start;
+        set_memory_nx(start, size >> PAGE_SHIFT);
+        printk(KERN_INFO "NX-protecting the kernel data: %luk\n", size >> 10);
+}
+
 void mark_rodata_ro(void)
 {
         unsigned long start = PFN_ALIGN(_text);
@@ -660,5 +675,33 @@ void mark_rodata_ro(void)
         printk(KERN_INFO "Write protecting the kernel text: %luk\n",
                 size >> 10);
 
-        //kernel_set_to_readonly = 1;
+	start += size;
+        size = (unsigned long)__end_rodata - start;
+        set_memory_ro(start, size >> PAGE_SHIFT);
+        printk(KERN_INFO "Write protecting the kernel read-only data: %luk\n",
+                size >> 10);
+
+	mark_nxdata_nx();
+}
+
+void set_kernel_text_rw(void)
+{
+        unsigned long start = PFN_ALIGN(_text);
+        unsigned long size = PFN_ALIGN(_etext) - start;
+
+        pr_debug("Set kernel text: %lx - %lx for read write\n",
+                 start, start+size);
+
+        set_memory_rw(start, size >> PAGE_SHIFT);
+}
+
+void set_kernel_text_ro(void)
+{
+        unsigned long start = PFN_ALIGN(_text);
+        unsigned long size = PFN_ALIGN(_etext) - start;
+
+        pr_debug("Set kernel text: %lx - %lx for read only\n",
+                 start, start+size);
+
+        set_memory_ro(start, size >> PAGE_SHIFT);
 }

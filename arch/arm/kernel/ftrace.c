@@ -66,12 +66,14 @@ static unsigned long adjust_address(struct dyn_ftrace *rec, unsigned long addr)
 
 int ftrace_arch_code_modify_prepare(void)
 {
+	set_kernel_text_rw();
 	set_all_modules_text_rw();
 	return 0;
 }
 
 int ftrace_arch_code_modify_post_process(void)
 {
+	set_kernel_text_ro();
 	set_all_modules_text_ro();
 	return 0;
 }
