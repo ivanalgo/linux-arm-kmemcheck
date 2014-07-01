@@ -66,6 +66,7 @@ static unsigned long adjust_address(struct dyn_ftrace *rec, unsigned long addr)
 
 int ftrace_arch_code_modify_prepare(void)
 {
+	printk(KERN_ERR "Yongting: set kernel text rw\n");
 	set_kernel_text_rw();
 	set_all_modules_text_rw();
 	return 0;
@@ -73,6 +74,7 @@ int ftrace_arch_code_modify_prepare(void)
 
 int ftrace_arch_code_modify_post_process(void)
 {
+	printk(KERN_ERR "Yongting: set kernel text ro\n");
 	set_kernel_text_ro();
 	set_all_modules_text_ro();
 	return 0;

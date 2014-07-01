@@ -657,12 +657,24 @@ static void mark_nxdata_nx(void)
          * so everything past _etext should be NX.
          */
         unsigned long start = PFN_ALIGN(_etext);
-        /*
-         * This comes from is_kernel_text upper limit. Also HPAGE where used:
-         */
-        unsigned long size = (((unsigned long)__init_end + PAGE_SIZE) & PAGE_MASK) - start;
+        unsigned long size = PFN_ALIGN(__init_end) - start;
+	printk(KERN_ERR "Yongting: _etext ~ __init_end = %08lx ~ %08lx\n", _etext, __init_end);
         set_memory_nx(start, size >> PAGE_SHIFT);
         printk(KERN_INFO "NX-protecting the kernel data: %luk\n", size >> 10);
+
+	/*
+	 * The rodata section should be not-executable.
+	 */
+	start = PFN_ALIGN(__start_rodata);
+	size = PFN_ALIGN(__end_rodata) - start;
+	set_memory_nx(start, size >> PAGE_SHIFT);
+
+	/*
+	 * The data section shloud be not-executable.
+	 */
+	start = PFN_ALIGN(_sdata);
+	size = PFN_ALIGN(_edata) - start;
+	set_memory_nx(start, size >> PAGE_SHIFT);
 }
 
 void mark_rodata_ro(void)
@@ -671,15 +683,12 @@ void mark_rodata_ro(void)
         unsigned long size = PFN_ALIGN(_etext) - start;
 
         set_memory_ro(start, size >> PAGE_SHIFT);
-        printk(KERN_INFO "Write protecting the kernel text: %luk\n",
+        printk(KERN_INFO "Write protecting the kernel text and rodata: %luk\n",
                 size >> 10);
 
-	start += size;
-        size = (unsigned long)__end_rodata - start;
-	printk(KERN_ERR "start = %08lx, size = %08lx\n", start, size);
-        set_memory_ro(start, size >> PAGE_SHIFT);
-        printk(KERN_INFO "Write protecting the kernel read-only data: %luk\n",
-                size >> 10);
+	printk(KERN_ERR "text: %08lx - %08lx\n", _stext, _etext);
+	printk(KERN_ERR  "roda: %08lx - %08lx\n", __start_rodata, __end_rodata);
+	printk(KERN_ERR "data: %08lx - %08lx\n", _sdata, _edata);
 
 	mark_nxdata_nx();
 }
@@ -689,7 +698,7 @@ void set_kernel_text_rw(void)
         unsigned long start = PFN_ALIGN(_text);
         unsigned long size = PFN_ALIGN(_etext) - start;
 
-        pr_debug("Set kernel text: %lx - %lx for read write\n",
+        pr_debug("Set kernel text and rodata: %lx - %lx for read write\n",
                  start, start+size);
 
         set_memory_rw(start, size >> PAGE_SHIFT);
@@ -700,7 +709,7 @@ void set_kernel_text_ro(void)
         unsigned long start = PFN_ALIGN(_text);
         unsigned long size = PFN_ALIGN(_etext) - start;
 
-        pr_debug("Set kernel text: %lx - %lx for read only\n",
+        pr_debug("Set kernel text and rodata: %lx - %lx for read only\n",
                  start, start+size);
 
         set_memory_ro(start, size >> PAGE_SHIFT);
