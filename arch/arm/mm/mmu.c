@@ -314,20 +314,12 @@ static struct mem_type mem_types[] = {
 		.prot_l1   = PMD_TYPE_TABLE,
 		.domain    = DOMAIN_USER,
 	},
-#ifdef CONFIG_KMEMCHECK
-	[MT_MEMORY_RWX] = {
-		.prote_pte	= L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY,
-		.prot_l1	= PDM_TYPE_TABLE,
-		.domain		= DOMAIN_KERNEL,
-	},
-#else
 	[MT_MEMORY_RWX] = {
 		.prot_pte  = L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY,
 		.prot_l1   = PMD_TYPE_TABLE,
 		.prot_sect = PMD_TYPE_SECT | PMD_SECT_AP_WRITE,
 		.domain    = DOMAIN_KERNEL,
 	},
-#endif
 	[MT_MEMORY_RW] = {
 		.prot_pte  = L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY |
 			     L_PTE_XN,
@@ -703,25 +695,10 @@ static void __init *early_alloc(unsigned long sz)
 	return early_alloc_aligned(sz, sz);
 }
 
-static char small_pte[1024][4096] __attribute__((aligned(4096)))= { {0xff}, };
-static int index = 0;
-
-static pte_t * small_alloc()
-{
-	if (index >= 1024)
-		BUG();
-
-	return (pte_t *)&small_pte[index++];	
-}
-
 static pte_t * __init early_pte_alloc(pmd_t *pmd, unsigned long addr, unsigned long prot)
 {
 	if (pmd_none(*pmd)) {
-#ifndef CONFIG_KMEMCHECK
 		pte_t *pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
-#else
-		pte_t *pte = small_alloc();
-#endif
 		__pmd_populate(pmd, __pa(pte), prot);
 	}
 	BUG_ON(pmd_bad(*pmd));
