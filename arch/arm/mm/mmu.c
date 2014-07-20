@@ -15,6 +15,7 @@
 #include <linux/nodemask.h>
 #include <linux/memblock.h>
 #include <linux/fs.h>
+#include <linux/seq_file.h>
 #include <linux/vmalloc.h>
 #include <linux/sizes.h>
 
@@ -116,6 +117,21 @@ static struct cachepolicy cache_policies[] __initdata = {
 		.pte_s2		= s2_policy(L_PTE_S2_MT_WRITEBACK),
 	}
 };
+
+unsigned long page_2m = 0;
+unsigned long page_4k = 0;
+
+#ifdef CONFIG_PROC_FS
+void arch_report_meminfo(struct seq_file *m)
+{
+        seq_printf(m, "DirectMap4k:    %8lu kB\n",
+                        page_4k << 2);
+        seq_printf(m, "DirectMap2M:    %8lu kB\n",
+                        page_2m << 11);
+}
+#endif
+
+
 
 #ifdef CONFIG_CPU_CP15
 static unsigned long initial_pmd_value __initdata = 0;
@@ -698,6 +714,7 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 	do {
 		set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)), 0);
 		pfn++;
+		page_4k++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 }
 
@@ -723,6 +740,7 @@ static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
 	do {
 		*pmd = __pmd(phys | type->prot_sect);
 		phys += SECTION_SIZE;
+		page_2m++;
 	} while (pmd++, addr += SECTION_SIZE, addr != end);
 
 	flush_pmd_entry(p);
