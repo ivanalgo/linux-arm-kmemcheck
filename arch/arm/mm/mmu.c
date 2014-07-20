@@ -721,29 +721,12 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 				  const struct mem_type *type)
 {
 /* templaory method to rebuild 4k size page table */
-#ifndef CONFIG_KMEMCHECK
 	pte_t *pte = early_pte_alloc(pmd, addr, type->prot_l1);
 	do {
 		set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)), 0);
 		pfn++;
 		page_4k++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
-#else
-	pte_t *pte, *start_pte;
-	if (pmd_none(*pmd) || (pmd_val(*pmd) & 2)) {
-		start_pte = pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
-	} else {
-		start_pte = pte = pte_offset_kernel(pmd, addr); 
-	}
-	
-	do {
-		set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)), 0);
-		pfn++;
-		page_4k++;
-	} while (pte++, addr += PAGE_SIZE, addr != end);
-
-	__pmd_populate(pmd, __pa(start_pte), type->prot_l1);
-#endif
 }
 
 static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
@@ -895,6 +878,8 @@ static void __init create_mapping(struct map_desc *md)
 	phys_addr_t phys;
 	const struct mem_type *type;
 	pgd_t *pgd;
+
+	printk("^^^Yongting: %s\n", __func__);
 
 	if (md->virtual != vectors_base() && md->virtual < TASK_SIZE) {
 		printk(KERN_WARNING "BUG: not creating mapping for 0x%08llx"
@@ -1382,6 +1367,8 @@ static void __init kmap_init(void)
 static void __init map_lowmem(void)
 {
 	struct memblock_region *reg;
+	unsigned long bss_end = ((unsigned long)_end + 0xfff00000) & 0xfff00000;
+	bss_end = virt_to_phys(bss_end);
 	unsigned long kernel_x_start = round_down(__pa(_stext), SECTION_SIZE);
 	unsigned long kernel_x_end = round_up(__pa(__init_end), SECTION_SIZE);
 
@@ -1395,6 +1382,12 @@ static void __init map_lowmem(void)
 			end = arm_lowmem_limit;
 		if (start >= end)
 			break;
+#ifdef CONFIG_KMEMCHECK
+		if (end <= bss_end)
+			continue;
+		else if (start < bss_end)
+			start = bss_end;
+#endif
 
 		if (end < kernel_x_start || start >= kernel_x_end) {
 			map.pfn = __phys_to_pfn(start);
