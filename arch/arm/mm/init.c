@@ -717,6 +717,15 @@ void set_kernel_text_ro(void)
 }
 #endif
 
+#ifdef CONFIG_KMEMCHECK
 void set_kernel_mapping_4k(void)
 {
+	unsigned long start = PFN_ALIGN(_edata);
+	unsigned long size  = PFN_ALIGN(high_memory) - start;
+
+	pr_debug("Set kernel heap: %08lx - %08lx into small page\n",
+		start, start + size);
+
+	set_memory_normal(start, size >> PAGE_SHIFT);
 }
+#endif

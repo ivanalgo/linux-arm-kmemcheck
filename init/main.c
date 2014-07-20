@@ -936,6 +936,7 @@ static int __ref kernel_init(void *unused)
 	async_synchronize_full();
 	free_initmem();
 	mark_rodata_ro();
+	set_kernel_mapping_4k();
 	system_state = SYSTEM_RUNNING;
 	numa_default_policy();
 

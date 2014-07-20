@@ -486,6 +486,7 @@ int set_memory_ro(unsigned long addr, int numpages);
 int set_memory_rw(unsigned long addr, int numpages);
 int set_memory_x(unsigned long addr, int numpages);
 int set_memory_nx(unsigned long addr, int numpages);
+int set_memory_normal(unsigned long addr, int numpages);
 
 void flush_uprobe_xol_access(struct page *page, unsigned long uaddr,
 			     void *kaddr, unsigned long len);
@@ -498,4 +499,11 @@ void set_kernel_text_ro(void);
 static inline void set_kernel_text_rw(void) { }
 static inline void set_kernel_text_ro(void) { }
 #endif
+
+#ifdef CONFIG_KMEMCHECK
+void set_kernel_mapping_4k(void);
+#else
+static inline void set_kernel_mapping_4k(void) { }
+#endif
+
 #endif
