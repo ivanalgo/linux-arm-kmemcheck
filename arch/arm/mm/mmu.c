@@ -706,10 +706,25 @@ static void __init *early_alloc(unsigned long sz)
 	return early_alloc_aligned(sz, sz);
 }
 
+static char small_pte[1024][4096] __attribute__((aligned(4096)))= { {0xff}, };
+static int index = 0;
+
+static pte_t * small_alloc()
+{
+	if (index >= 1024)
+		BUG();
+
+	return (pte_t *)&small_pte[index++];	
+}
+
 static pte_t * __init early_pte_alloc(pmd_t *pmd, unsigned long addr, unsigned long prot)
 {
 	if (pmd_none(*pmd)) {
+#ifndef CONFIG_KMEMCHECK
 		pte_t *pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
+#else
+		pte_t *pte = small_alloc();
+#endif
 		__pmd_populate(pmd, __pa(pte), prot);
 	}
 	BUG_ON(pmd_bad(*pmd));
@@ -1367,8 +1382,6 @@ static void __init kmap_init(void)
 static void __init map_lowmem(void)
 {
 	struct memblock_region *reg;
-	unsigned long bss_end = ((unsigned long)_end + 0xfff00000) & 0xfff00000;
-	bss_end = virt_to_phys(bss_end);
 	unsigned long kernel_x_start = round_down(__pa(_stext), SECTION_SIZE);
 	unsigned long kernel_x_end = round_up(__pa(__init_end), SECTION_SIZE);
 
@@ -1382,12 +1395,6 @@ static void __init map_lowmem(void)
 			end = arm_lowmem_limit;
 		if (start >= end)
 			break;
-#ifdef CONFIG_KMEMCHECK
-		if (end <= bss_end)
-			continue;
-		else if (start < bss_end)
-			start = bss_end;
-#endif
 
 		if (end < kernel_x_start || start >= kernel_x_end) {
 			map.pfn = __phys_to_pfn(start);
