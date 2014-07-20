@@ -714,3 +714,7 @@ void set_kernel_text_ro(void)
 
         set_memory_ro(start, size >> PAGE_SHIFT);
 }
+
+void set_kernel_mapping_4k(void)
+{
+}

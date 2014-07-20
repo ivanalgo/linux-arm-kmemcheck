@@ -397,15 +397,22 @@ int set_memory_##_name(unsigned long addr, int numpages) \
 	return 0;\
 }
 
+static inline pte_t pte_normal(pte_t pte)
+{
+	return pte;
+}
+
 PTE_SET_FN(ro, pte_wrprotect)
 PTE_SET_FN(rw, pte_mkwrite)
 PTE_SET_FN(x, pte_mkexec)
 PTE_SET_FN(nx, pte_mknexec)
+PTE_SET_FN(normal, pte_normal)
 
 SET_MEMORY_FN(ro, pte_set_ro)
 SET_MEMORY_FN(rw, pte_set_rw)
 SET_MEMORY_FN(x, pte_set_x)
 SET_MEMORY_FN(nx, pte_set_nx)
+SET_MEMORY_FN(normal, pte_set_normal)
 
 /*
  * Adjust the PMD section entries according to the CPU in use.
