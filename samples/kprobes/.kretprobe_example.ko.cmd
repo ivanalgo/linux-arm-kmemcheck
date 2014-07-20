@@ -1,0 +1,1 @@
+cmd_/home/ivan/kernel_git/linux/samples/kprobes/kretprobe_example.ko := arm-linux-gnueabi-ld -EL -r  -T /home/ivan/kernel_git/linux/scripts/module-common.lds --build-id  -o /home/ivan/kernel_git/linux/samples/kprobes/kretprobe_example.ko /home/ivan/kernel_git/linux/samples/kprobes/kretprobe_example.o /home/ivan/kernel_git/linux/samples/kprobes/kretprobe_example.mod.o
