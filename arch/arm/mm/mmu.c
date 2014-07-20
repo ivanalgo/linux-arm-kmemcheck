@@ -314,12 +314,20 @@ static struct mem_type mem_types[] = {
 		.prot_l1   = PMD_TYPE_TABLE,
 		.domain    = DOMAIN_USER,
 	},
+#ifdef CONFIG_KMEMCHECK
+	[MT_MEMORY_RWX] = {
+		.prote_pte	= L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY,
+		.prot_l1	= PDM_TYPE_TABLE,
+		.domain		= DOMAIN_KERNEL,
+	},
+#else
 	[MT_MEMORY_RWX] = {
 		.prot_pte  = L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY,
 		.prot_l1   = PMD_TYPE_TABLE,
 		.prot_sect = PMD_TYPE_SECT | PMD_SECT_AP_WRITE,
 		.domain    = DOMAIN_KERNEL,
 	},
+#endif
 	[MT_MEMORY_RW] = {
 		.prot_pte  = L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY |
 			     L_PTE_XN,
@@ -712,12 +720,30 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 				  unsigned long end, unsigned long pfn,
 				  const struct mem_type *type)
 {
+/* templaory method to rebuild 4k size page table */
+#ifndef CONFIG_KMEMCHECK
 	pte_t *pte = early_pte_alloc(pmd, addr, type->prot_l1);
 	do {
 		set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)), 0);
 		pfn++;
 		page_4k++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
+#else
+	pte_t *pte, *start_pte;
+	if (pmd_none(*pmd) || (pmd_val(*pmd) & 2)) {
+		start_pte = pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
+	} else {
+		start_pte = pte = pte_offset_kernel(pmd, addr); 
+	}
+	
+	do {
+		set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)), 0);
+		pfn++;
+		page_4k++;
+	} while (pte++, addr += PAGE_SIZE, addr != end);
+
+	__pmd_populate(pmd, __pa(start_pte), type->prot_l1);
+#endif
 }
 
 static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
@@ -766,12 +792,10 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 		 * Try a section mapping - addr, next and phys must all be
 		 * aligned to a section boundary.
 		 */
-#ifdef CONFIG_KMEMCHECK
 		if (type->prot_sect &&
 				((addr | next | phys) & ~SECTION_MASK) == 0) {
 			__map_init_section(pmd, addr, next, phys, type);
 		} else 
-#endif
 		{
 			alloc_init_pte(pmd, addr, next,
 						__phys_to_pfn(phys), type);
