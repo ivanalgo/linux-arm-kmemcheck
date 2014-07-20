@@ -1833,6 +1833,8 @@ int vm_iomap_memory(struct vm_area_struct *vma, phys_addr_t start, unsigned long
 }
 EXPORT_SYMBOL(vm_iomap_memory);
 
+extern int arch_split_huge_pmd(pmd_t *pmd, struct mm_struct *mm);
+
 static int apply_to_pte_range(struct mm_struct *mm, pmd_t *pmd,
 				     unsigned long addr, unsigned long end,
 				     pte_fn_t fn, void *data)
@@ -1841,6 +1843,14 @@ static int apply_to_pte_range(struct mm_struct *mm, pmd_t *pmd,
 	int err;
 	pgtable_t token;
 	spinlock_t *uninitialized_var(ptl);
+
+	printk(KERN_ERR "Yongting debug %s\n", __func__);
+	printk(KERN_ERR "Yongting debug pmd = %08lx\n", *pmd);
+	if (pmd_val(*pmd) & 2) {
+		printk(KERN_ERR "Yongting debug begin split\n");
+		arch_split_huge_pmd(pmd, mm); 
+		printk(KERN_ERR "Yongting finish split\n");
+	}
 
 	pte = (mm == &init_mm) ?
 		pte_alloc_kernel(pmd, addr) :

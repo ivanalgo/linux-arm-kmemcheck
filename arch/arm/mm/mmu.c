@@ -397,11 +397,8 @@ int set_memory_##_name(unsigned long addr, int numpages) \
 	unsigned long size = PAGE_SIZE*numpages; \
 	unsigned end = start + size; \
 \
-	if (start < MODULES_VADDR || start >= MODULES_END) \
+	if (start < MODULES_VADDR) \
 		return -EINVAL;\
-\
-	if (end < MODULES_VADDR || end >= MODULES_END) \
-		return -EINVAL; \
 \
 	apply_to_page_range(&init_mm, start, size, callback, NULL); \
 	flush_tlb_kernel_range(start, end); \
@@ -1540,3 +1537,54 @@ void __init paging_init(const struct machine_desc *mdesc)
 	__flush_dcache_page(NULL, empty_zero_page);
 }
 
+
+int arch_split_huge_pmd(pmd_t *pmd, struct mm_struct *mm)
+{
+	pte_t *pte, *next;
+	struct page *page = pmd_page(*pmd);
+	//unsigned long pfn = pmd_pfn(*pmd);
+	int i = 0;
+
+	printk(KERN_ERR "mem_types[MT_MEMORY_RWX].prot_sect = %08lx\n", mem_types[MT_MEMORY_RWX].prot_sect);
+	pte = pte_alloc_one_kernel(mm,  0); // FIXME??? 0?? */
+	if (!pte)
+		return -ENOMEM;
+
+	next = pte;
+	do {
+		set_pte_ext(next, mk_pte(page, mem_types[MT_MEMORY_RWX].prot_pte), 0);	
+	} while(next++, page++, ++i != PTRS_PER_PTE);
+
+		printk(KERN_ERR "Yongting set_pte_ext OK!\n");
+	 __pmd_populate(pmd, __pa(pte), mem_types[MT_MEMORY_RWX].prot_sect);
+	printk(KERN_ERR "Yongting pmd populate ok!\n");
+
+	return 0;
+}
+
+static void split_pmd(pmd_t *pmd, unsigned long addr, unsigned long end,
+                        pgprot_t mask_set, pgprot_t mask_clr)
+{
+        pgprot_t old_prot = pmd_val(*pmd);
+        pgprot_t new_prot = (old_prot | mask_set) & (~mask_clr);
+        unsigned long start = addr & (~PMD_MASK);
+        struct page *page = pmd_page(*pmd);
+        int i = 0;
+
+        /* FIXME ??? use standard code to alloc pte table */
+        pte_t *pte = pte_alloc_one_kernel(&init_mm, start);
+
+    do {
+        if (start < addr || start > end)
+            set_pte_ext(pte, mk_pte(page, old_prot), 0);
+        else
+            set_pte_ext(pte, mk_pte(page, new_prot), 0);
+
+        pte++;
+        page++;
+        start += PAGE_SIZE;
+
+    } while (i++ != PTRS_PER_PTE);
+
+    __pmd_populate(pmd, __pa(pte), PMD_TYPE_SECT | PMD_SECT_AP_WRITE);
+}
