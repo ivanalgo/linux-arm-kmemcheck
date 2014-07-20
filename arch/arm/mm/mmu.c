@@ -15,7 +15,6 @@
 #include <linux/nodemask.h>
 #include <linux/memblock.h>
 #include <linux/fs.h>
-#include <linux/seq_file.h>
 #include <linux/vmalloc.h>
 #include <linux/sizes.h>
 
@@ -113,23 +112,6 @@ static struct cachepolicy cache_policies[] __initdata = {
 		.pte_s2		= s2_policy(L_PTE_S2_MT_WRITEBACK),
 	}
 };
-
-unsigned long page_2m = 0;
-unsigned long page_4k = 0;
-
-extern int kmemcheck_enabled;
-
-#ifdef CONFIG_PROC_FS
-void arch_report_meminfo(struct seq_file *m)
-{
-        seq_printf(m, "DirectMap4k:    %8lu kB\n",
-                        page_4k << 2);
-        seq_printf(m, "DirectMap2M:    %8lu kB\n",
-                        page_2m << 11);
-}
-#endif
-
-
 
 #ifdef CONFIG_CPU_CP15
 /*
@@ -303,20 +285,12 @@ static struct mem_type mem_types[] = {
 		.prot_l1   = PMD_TYPE_TABLE,
 		.domain    = DOMAIN_USER,
 	},
-#ifdef CONFIG_KMEMCHECK
-	[MT_MEMORY] = {
-		.prot_pte  = L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY,
-		.prot_l1   = PMD_TYPE_TABLE,
-		.domain    = DOMAIN_KERNEL,
-	},
-#else
 	[MT_MEMORY] = {
 		.prot_pte  = L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY,
 		.prot_l1   = PMD_TYPE_TABLE,
 		.prot_sect = PMD_TYPE_SECT | PMD_SECT_AP_WRITE,
 		.domain    = DOMAIN_KERNEL,
 	},
-#endif
 	[MT_ROM] = {
 		.prot_sect = PMD_TYPE_SECT,
 		.domain    = DOMAIN_KERNEL,
@@ -621,25 +595,10 @@ static void __init *early_alloc(unsigned long sz)
 	return early_alloc_aligned(sz, sz);
 }
 
-static char small_pte[1024][4096] __attribute__((aligned(4096)))= { {0xff}, };
-static int index = 0;
-
-static pte_t * small_alloc()
-{
-	if (index >= 1024)
-		BUG();
-
-	return (pte_t *)&small_pte[index++];	
-}
-
 static pte_t * __init early_pte_alloc(pmd_t *pmd, unsigned long addr, unsigned long prot)
 {
 	if (pmd_none(*pmd)) {
-#ifndef CONFIG_KMEMCHECK
 		pte_t *pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
-#else
-		pte_t *pte = small_alloc();
-#endif
 		__pmd_populate(pmd, __pa(pte), prot);
 	}
 	BUG_ON(pmd_bad(*pmd));
@@ -650,12 +609,10 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 				  unsigned long end, unsigned long pfn,
 				  const struct mem_type *type)
 {
-/* templaory method to rebuild 4k size page table */
 	pte_t *pte = early_pte_alloc(pmd, addr, type->prot_l1);
 	do {
 		set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)), 0);
 		pfn++;
-		page_4k++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 }
 
@@ -681,7 +638,6 @@ static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
 	do {
 		*pmd = __pmd(phys | type->prot_sect);
 		phys += SECTION_SIZE;
-		page_2m++;
 	} while (pmd++, addr += SECTION_SIZE, addr != end);
 
 	flush_pmd_entry(p);
@@ -708,8 +664,7 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 		if (type->prot_sect &&
 				((addr | next | phys) & ~SECTION_MASK) == 0) {
 			__map_init_section(pmd, addr, next, phys, type);
-		} else 
-		{
+		} else {
 			alloc_init_pte(pmd, addr, next,
 						__phys_to_pfn(phys), type);
 		}
@@ -807,8 +762,6 @@ static void __init create_mapping(struct map_desc *md)
 	phys_addr_t phys;
 	const struct mem_type *type;
 	pgd_t *pgd;
-
-	printk("^^^Yongting: %s\n", __func__);
 
 	if (md->virtual != vectors_base() && md->virtual < TASK_SIZE) {
 		printk(KERN_WARNING "BUG: not creating mapping for 0x%08llx"
@@ -1304,7 +1257,7 @@ static void __init kmap_init(void)
 #endif
 }
 
-void __init map_lowmem(void)
+static void __init map_lowmem(void)
 {
 	struct memblock_region *reg;
 
@@ -1356,4 +1309,3 @@ void __init paging_init(struct machine_desc *mdesc)
 	empty_zero_page = virt_to_page(zero_page);
 	__flush_dcache_page(NULL, empty_zero_page);
 }
-
