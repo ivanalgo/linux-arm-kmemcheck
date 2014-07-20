@@ -650,6 +650,7 @@ static int __init keepinitrd_setup(char *__unused)
 __setup("keepinitrd", keepinitrd_setup);
 #endif
 
+#ifdef CONFIG_DEBUG_RODATA
 static void mark_nxdata_nx(void)
 {
         /*
@@ -714,6 +715,7 @@ void set_kernel_text_ro(void)
 
         set_memory_ro(start, size >> PAGE_SHIFT);
 }
+#endif
 
 void set_kernel_mapping_4k(void)
 {
