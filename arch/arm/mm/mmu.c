@@ -41,6 +41,12 @@
 #include "mm.h"
 #include "tcm.h"
 
+#ifdef YONGTING_KMEMCHECK
+#define DIRECT_MAPPING_SIZE PAGE_SIZE
+#else
+#define DIRECT_MAPPING_SIZE SECTION_SIZE;
+#endif
+
 /*
  * empty_zero_page is a special page that is used for
  * zero-initialized data and COW.
@@ -725,6 +731,35 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 }
 
+#ifdef YONGTING_KMEMCHECK
+static void __init __map_init_4k(pmd_t *pmd, unsigned long addr,
+			unsigned long end, phys_addr_t phys,
+			const struct mem_type *type)
+{
+	do {
+		if ((!pmd_none(*pmd)) && type->prot_sect &&
+				 ((addr | end | phys) & ~PMD_MASK) == 0) {
+			pmd_t *p = pmd;
+#ifndef CONFIG_ARM_LPAE
+			if (addr & SECTION_SIZE)
+				pmd++;
+#endif
+			*pmd = __pmd(phys | type->prot_sect);
+			phys += SECTION_SIZE;
+			page_2m++;
+			flush_pmd_entry(p);
+		} else {
+			pte_t *pte = early_pte_alloc(pmd, addr, type->prot_l1);
+			do {
+				set_pte_ext(pte, pfn_pte(__phys_to_pfn(phys), __pgprot(type->prot_pte)), 0);
+				phys += PAGE_SIZE;	
+				page_4k++;
+			} while(pte++, addr += PAGE_SIZE, addr != end);
+		}
+	} while(pmd++, addr += SECTION_SIZE, addr != end);
+}
+#endif
+
 static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
 			unsigned long end, phys_addr_t phys,
 			const struct mem_type *type)
@@ -744,6 +779,7 @@ static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
 	if (addr & SECTION_SIZE)
 		pmd++;
 #endif
+	printk("Yongting: section: %08lx - %08lx(%s)\n", addr ,end, pmd_none(*pmd)? "no":"yes");
 	do {
 		*pmd = __pmd(phys | type->prot_sect);
 		phys += SECTION_SIZE;
@@ -755,7 +791,7 @@ static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
 
 static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 				      unsigned long end, phys_addr_t phys,
-				      const struct mem_type *type)
+				      const struct mem_type *type, unsigned long page_size)
 {
 	pmd_t *pmd = pmd_offset(pud, addr);
 	unsigned long next;
@@ -766,13 +802,13 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 		 * all the pmds for the given range.
 		 */
 		next = pmd_addr_end(addr, end);
-
 		/*
 		 * Try a section mapping - addr, next and phys must all be
 		 * aligned to a section boundary.
 		 */
 		if (type->prot_sect &&
-				((addr | next | phys) & ~SECTION_MASK) == 0) {
+			((addr | next | phys) & ~SECTION_MASK) == 0 &&
+			page_size == SECTION_SIZE) {
 			__map_init_section(pmd, addr, next, phys, type);
 		} else 
 		{
@@ -787,14 +823,14 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 
 static void __init alloc_init_pud(pgd_t *pgd, unsigned long addr,
 				  unsigned long end, phys_addr_t phys,
-				  const struct mem_type *type)
+				  const struct mem_type *type, unsigned long page_size)
 {
 	pud_t *pud = pud_offset(pgd, addr);
 	unsigned long next;
 
 	do {
 		next = pud_addr_end(addr, end);
-		alloc_init_pmd(pud, addr, next, phys, type);
+		alloc_init_pmd(pud, addr, next, phys, type, page_size);
 		phys += next - addr;
 	} while (pud++, addr = next, addr != end);
 }
@@ -875,7 +911,7 @@ static void __init create_mapping(struct map_desc *md)
 	const struct mem_type *type;
 	pgd_t *pgd;
 
-	printk("^^^Yongting: %s\n", __func__);
+	printk("Yongting: create_mapping(%08lx, %08lx, %d)\n", md->virtual, md->virtual + md->length, md->type);
 
 	if (md->virtual != vectors_base() && md->virtual < TASK_SIZE) {
 		printk(KERN_WARNING "BUG: not creating mapping for 0x%08llx"
@@ -920,7 +956,7 @@ static void __init create_mapping(struct map_desc *md)
 	do {
 		unsigned long next = pgd_addr_end(addr, end);
 
-		alloc_init_pud(pgd, addr, next, phys, type);
+		alloc_init_pud(pgd, addr, next, phys, type, md->page_size);
 
 		phys += next - addr;
 		addr = next;
@@ -942,6 +978,7 @@ void __init iotable_init(struct map_desc *io_desc, int nr)
 	svm = early_alloc_aligned(sizeof(*svm) * nr, __alignof__(*svm));
 
 	for (md = io_desc; nr; md++, nr--) {
+		md->page_size = SECTION_SIZE;
 		create_mapping(md);
 
 		vm = &svm->vm;
@@ -1276,6 +1313,7 @@ static void __init devicemaps_init(const struct machine_desc *mdesc)
 	map.pfn = __phys_to_pfn(CONFIG_XIP_PHYS_ADDR & SECTION_MASK);
 	map.virtual = MODULES_VADDR;
 	map.length = ((unsigned long)_etext - map.virtual + ~SECTION_MASK) & SECTION_MASK;
+	map.page_size = SECTION_SIZE;
 	map.type = MT_ROM;
 	create_mapping(&map);
 #endif
@@ -1287,6 +1325,7 @@ static void __init devicemaps_init(const struct machine_desc *mdesc)
 	map.pfn = __phys_to_pfn(FLUSH_BASE_PHYS);
 	map.virtual = FLUSH_BASE;
 	map.length = SZ_1M;
+	map.page_size = SECTION_SIZE;
 	map.type = MT_CACHECLEAN;
 	create_mapping(&map);
 #endif
@@ -1294,6 +1333,7 @@ static void __init devicemaps_init(const struct machine_desc *mdesc)
 	map.pfn = __phys_to_pfn(FLUSH_BASE_PHYS + SZ_1M);
 	map.virtual = FLUSH_BASE_MINICACHE;
 	map.length = SZ_1M;
+	map.page_size = SECTION_SIZE;
 	map.type = MT_MINICLEAN;
 	create_mapping(&map);
 #endif
@@ -1306,6 +1346,7 @@ static void __init devicemaps_init(const struct machine_desc *mdesc)
 	map.pfn = __phys_to_pfn(virt_to_phys(vectors));
 	map.virtual = 0xffff0000;
 	map.length = PAGE_SIZE;
+	map.page_size = SECTION_SIZE;
 #ifdef CONFIG_KUSER_HELPERS
 	map.type = MT_HIGH_VECTORS;
 #else
@@ -1316,6 +1357,7 @@ static void __init devicemaps_init(const struct machine_desc *mdesc)
 	if (!vectors_high()) {
 		map.virtual = 0;
 		map.length = PAGE_SIZE * 2;
+		map.page_size = SECTION_SIZE;
 		map.type = MT_LOW_VECTORS;
 		create_mapping(&map);
 	}
@@ -1324,6 +1366,7 @@ static void __init devicemaps_init(const struct machine_desc *mdesc)
 	map.pfn += 1;
 	map.virtual = 0xffff0000 + PAGE_SIZE;
 	map.length = PAGE_SIZE;
+	map.page_size = SECTION_SIZE;
 	map.type = MT_LOW_VECTORS;
 	create_mapping(&map);
 
@@ -1365,6 +1408,9 @@ static void __init map_lowmem(void)
 	struct memblock_region *reg;
 	unsigned long kernel_x_start = round_down(__pa(_stext), SECTION_SIZE);
 	unsigned long kernel_x_end = round_up(__pa(__init_end), SECTION_SIZE);
+	unsigned long kernel_end = round_up(__pa(_end), 2*SECTION_SIZE);
+
+	printk("_end = %08lx, kernel_end = %08lx\n", _end, kernel_end);
 
 	/* Map all the lowmem memory banks. */
 	for_each_memblock(memory, reg) {
@@ -1376,11 +1422,38 @@ static void __init map_lowmem(void)
 			end = arm_lowmem_limit;
 		if (start >= end)
 			break;
+		printk("Yongting: mapping %08lx - %08lx\n", start, end);
+#if 1
+		if (end > kernel_end) {
+			if (start >= kernel_end) {
+				map.pfn = __phys_to_pfn(start);
+				map.virtual = __phys_to_virt(start);
+				map.length = end - start;
+				map.page_size = DIRECT_MAPPING_SIZE;
+				map.type = MT_MEMORY_RW;
+
+				create_mapping(&map);
+				continue;
+			} else {
+				map.pfn = __phys_to_pfn(kernel_end);
+				map.virtual = __phys_to_virt(kernel_end);
+				map.length = end - kernel_end;
+				map.page_size = DIRECT_MAPPING_SIZE;
+				map.type = MT_MEMORY_RW;
+
+				create_mapping(&map);
+
+				/* go throuth to map the remainder part */
+				end = kernel_end;
+			}
+		}
+#endif
 
 		if (end < kernel_x_start || start >= kernel_x_end) {
 			map.pfn = __phys_to_pfn(start);
 			map.virtual = __phys_to_virt(start);
 			map.length = end - start;
+			map.page_size = SECTION_SIZE;
 			map.type = MT_MEMORY_RWX;
 
 			create_mapping(&map);
@@ -1390,6 +1463,7 @@ static void __init map_lowmem(void)
 				map.pfn = __phys_to_pfn(start);
 				map.virtual = __phys_to_virt(start);
 				map.length = kernel_x_start - start;
+				map.page_size = SECTION_SIZE;
 				map.type = MT_MEMORY_RW;
 
 				create_mapping(&map);
@@ -1398,6 +1472,7 @@ static void __init map_lowmem(void)
 			map.pfn = __phys_to_pfn(kernel_x_start);
 			map.virtual = __phys_to_virt(kernel_x_start);
 			map.length = kernel_x_end - kernel_x_start;
+			map.page_size = SECTION_SIZE;
 			map.type = MT_MEMORY_RWX;
 
 			create_mapping(&map);
@@ -1406,6 +1481,7 @@ static void __init map_lowmem(void)
 				map.pfn = __phys_to_pfn(kernel_x_end);
 				map.virtual = __phys_to_virt(kernel_x_end);
 				map.length = end - kernel_x_end;
+				map.page_size = SECTION_SIZE;
 				map.type = MT_MEMORY_RW;
 
 				create_mapping(&map);
@@ -1578,4 +1654,5 @@ static void split_pmd(pmd_t *pmd, unsigned long addr, unsigned long end,
     } while (i++ != PTRS_PER_PTE);
 
     __pmd_populate(pmd, __pa(pte), PMD_TYPE_SECT | PMD_SECT_AP_WRITE);
+
 }

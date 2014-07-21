@@ -18,6 +18,7 @@ struct map_desc {
 	unsigned long virtual;
 	unsigned long pfn;
 	unsigned long length;
+	unsigned long page_size;
 	unsigned int type;
 };
 
