@@ -124,7 +124,7 @@ static struct cachepolicy cache_policies[] __initdata = {
 	}
 };
 
-unsigned long page_2m = 0;
+unsigned long page_1m = 0;
 unsigned long page_4k = 0;
 
 extern int kmemcheck_enabled;
@@ -134,8 +134,8 @@ void arch_report_meminfo(struct seq_file *m)
 {
         seq_printf(m, "DirectMap4k:    %8lu kB\n",
                         page_4k << 2);
-        seq_printf(m, "DirectMap2M:    %8lu kB\n",
-                        page_2m << 11);
+        seq_printf(m, "DirectMap1M:    %8lu kB\n",
+                        page_1m << 10);
 }
 #endif
 
@@ -731,35 +731,6 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 }
 
-#ifdef YONGTING_KMEMCHECK
-static void __init __map_init_4k(pmd_t *pmd, unsigned long addr,
-			unsigned long end, phys_addr_t phys,
-			const struct mem_type *type)
-{
-	do {
-		if ((!pmd_none(*pmd)) && type->prot_sect &&
-				 ((addr | end | phys) & ~PMD_MASK) == 0) {
-			pmd_t *p = pmd;
-#ifndef CONFIG_ARM_LPAE
-			if (addr & SECTION_SIZE)
-				pmd++;
-#endif
-			*pmd = __pmd(phys | type->prot_sect);
-			phys += SECTION_SIZE;
-			page_2m++;
-			flush_pmd_entry(p);
-		} else {
-			pte_t *pte = early_pte_alloc(pmd, addr, type->prot_l1);
-			do {
-				set_pte_ext(pte, pfn_pte(__phys_to_pfn(phys), __pgprot(type->prot_pte)), 0);
-				phys += PAGE_SIZE;	
-				page_4k++;
-			} while(pte++, addr += PAGE_SIZE, addr != end);
-		}
-	} while(pmd++, addr += SECTION_SIZE, addr != end);
-}
-#endif
-
 static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
 			unsigned long end, phys_addr_t phys,
 			const struct mem_type *type)
@@ -783,7 +754,7 @@ static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
 	do {
 		*pmd = __pmd(phys | type->prot_sect);
 		phys += SECTION_SIZE;
-		page_2m++;
+		page_1m++;
 	} while (pmd++, addr += SECTION_SIZE, addr != end);
 
 	flush_pmd_entry(p);
@@ -1416,6 +1387,7 @@ static void __init map_lowmem(void)
 	for_each_memblock(memory, reg) {
 		phys_addr_t start = reg->base;
 		phys_addr_t end = start + reg->size;
+		phys_addr_t mem_end = end;
 		struct map_desc map;
 
 		if (end > arm_lowmem_limit)
@@ -1423,7 +1395,7 @@ static void __init map_lowmem(void)
 		if (start >= end)
 			break;
 		printk("Yongting: mapping %08lx - %08lx\n", start, end);
-#if 1
+#if 0
 		if (end > kernel_end) {
 			if (start >= kernel_end) {
 				map.pfn = __phys_to_pfn(start);
@@ -1487,6 +1459,8 @@ static void __init map_lowmem(void)
 				create_mapping(&map);
 			}
 		}
+
+		set_kernel_mapping_4k(__va(kernel_end), __va(mem_end));
 	}
 }
 
@@ -1605,12 +1579,10 @@ int arch_split_huge_pmd(pmd_t *pmd, struct mm_struct *mm)
 	//unsigned long pfn = pmd_pfn(*pmd);
 	int i = 0;
 
-	printk(KERN_ERR "mem_types[MT_MEMORY_RWX].prot_sect = %08lx\n", mem_types[MT_MEMORY_RWX].prot_sect);
 	pte = pte_alloc_one_kernel(&init_mm,  0); // FIXME??? 0?? */
 	if (!pte)
 		return -ENOMEM;
 
-	printk(KERN_ERR "*pmd = %08lx\n", pmd_val(*pmd));
 
 	next = pte;
 	do {
@@ -1619,12 +1591,7 @@ int arch_split_huge_pmd(pmd_t *pmd, struct mm_struct *mm)
 			printk(KERN_ERR "*pte = %08lx\n", pte_val(*pte));
 	} while(next++, pfn++, ++i != PTRS_PER_PTE);
 
-		printk(KERN_ERR "Yongting set_pte_ext OK!\n");
-	 pmd_populate_kernel(&init_mm, pmd, pte);
-	printk(KERN_ERR "*pmd = %08lx\n", pmd_val(*pmd));
-	printk(KERN_ERR "Yongting pmd populate ok!\n");
-	printk(KERN_ERR "Yongting pmd populate ok!\n");
-	printk(KERN_ERR "Yongting pmd populate ok!\n");
+	pmd_populate_kernel(&init_mm, pmd, pte);
 
 	return 0;
 }

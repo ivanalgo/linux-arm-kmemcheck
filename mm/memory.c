@@ -1834,6 +1834,8 @@ int vm_iomap_memory(struct vm_area_struct *vma, phys_addr_t start, unsigned long
 EXPORT_SYMBOL(vm_iomap_memory);
 
 extern int arch_split_huge_pmd(pmd_t *pmd, struct mm_struct *mm);
+extern int page_4k;
+extern int page_1m;
 
 static int apply_to_pte_range(struct mm_struct *mm, pmd_t *pmd,
 				     unsigned long addr, unsigned long end,
@@ -1844,12 +1846,10 @@ static int apply_to_pte_range(struct mm_struct *mm, pmd_t *pmd,
 	pgtable_t token;
 	spinlock_t *uninitialized_var(ptl);
 
-	printk(KERN_ERR "Yongting debug %s\n", __func__);
-	printk(KERN_ERR "Yongting debug pmd = %08lx\n", *pmd);
 	if (pmd_val(*pmd) & 2) {
-		printk(KERN_ERR "Yongting debug begin split\n");
 		arch_split_huge_pmd(pmd, mm); 
-		printk(KERN_ERR "Yongting finish split\n");
+		page_1m -= 2;
+        	page_4k +=  PTRS_PER_PTE;
 	}
 
 	pte = (mm == &init_mm) ?
@@ -1859,9 +1859,6 @@ static int apply_to_pte_range(struct mm_struct *mm, pmd_t *pmd,
 		return -ENOMEM;
 
 	BUG_ON(pmd_huge(*pmd));
-	if (addr & 0xfffff == 0) {
-		printk(KERN_ERR "addr = %08lx, *pmd = %08lx\n", addr, *pmd);	
-	}
 
 	arch_enter_lazy_mmu_mode();
 

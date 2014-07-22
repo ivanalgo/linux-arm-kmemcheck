@@ -500,10 +500,10 @@ static inline void set_kernel_text_rw(void) { }
 static inline void set_kernel_text_ro(void) { }
 #endif
 
-#ifdef CONFIG_KMEMCHECK
-void set_kernel_mapping_4k(void);
+#ifdef YONGTING_KMEMCHECK
+void set_kernel_mapping_4k(unsigned long start, unsigned long end);
 #else
-static inline void set_kernel_mapping_4k(void) { }
+static inline void set_kernel_mapping_4k(unsigned long start, unsigned long end) { }
 #endif
 
 #endif

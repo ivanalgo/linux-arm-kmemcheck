@@ -717,15 +717,14 @@ void set_kernel_text_ro(void)
 }
 #endif
 
-#ifdef CONFIG_KMEMCHECK
-void set_kernel_mapping_4k(void)
+#ifdef YONGTING_KMEMCHECK
+void set_kernel_mapping_4k(unsigned long start, unsigned long end)
 {
-	unsigned long start = PFN_ALIGN(_edata);
-	unsigned long size  = PFN_ALIGN(high_memory) - start;
-
 	pr_debug("Set kernel heap: %08lx - %08lx into small page\n",
-		start, start + size);
+		start, end);
+	printk(KERN_ERR "Yongting: Set kernel heap: %08lx - %08lx into small page\n",
+		start, end);
 
-	set_memory_normal(start, size >> PAGE_SHIFT);
+	set_memory_normal(start, (end - start) >> PAGE_SHIFT);
 }
 #endif
