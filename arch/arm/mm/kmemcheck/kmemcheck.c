@@ -85,6 +85,14 @@ static int __init param_kmemcheck(char *str)
 
 early_param("kmemcheck", param_kmemcheck);
 
+#ifndef CONFIG_ARM_LPAE
+static void kmemcheck_handle_page(pte_t *pte, unsigned long address, int hide)
+{
+	pte_page(*pte)->kmemcheck_hidden = hide;
+}
+#else
+#endif
+
 int kmemcheck_show_addr(unsigned long address)
 {
 	pte_t *pte;
@@ -93,10 +101,10 @@ int kmemcheck_show_addr(unsigned long address)
 	if (!pte)
 		return 0;
 
+	kmemcheck_handle_page(pte, address, 1);
 #if 0
-	set_pte(pte, __pte(pte_val(*pte) | _PAGE_PRESENT));
-#endif
 	flush_tlb_kernel_range(address, address + sizeof(unsigned long));
+#endif
 	return 1;
 }
 
@@ -108,10 +116,10 @@ int kmemcheck_hide_addr(unsigned long address)
 	if (!pte)
 		return 0;
 
+	kmemcheck_handle_page(pte, address, 0);
 #if 0
-	set_pte(pte, __pte(pte_val(*pte) & ~_PAGE_PRESENT));
-#endif
 	flush_tlb_kernel_range(address, address + sizeof(unsigned long));	
+#endif
 	return 1;
 }
 
@@ -271,18 +279,15 @@ void kmemcheck_show_pages(struct page *p, unsigned int n)
 	for (i = 0; i < n; ++i) {
 		unsigned long address;
 		pte_t *pte;
-		unsigned int is_pte;
 
 		address = (unsigned long) page_address(&p[i]);
-		pte = lookup_address(address, &is_pte);
+		pte = lookup_address(address);
 		BUG_ON(!pte);
-		BUG_ON(!is_pte);
 
+		kmemcheck_handle_page(pte, address, 0);
 #if 0
-		set_pte(pte, __pte(pte_val(*pte) | _PAGE_PRESENT));
-		set_pte(pte, __pte(pte_val(*pte) & ~_PAGE_HIDDEN));
-#endif
 		flush_tlb_kernel_range(address, address + sizeof(unsigned long));
+#endif
 	}
 }
 
@@ -299,18 +304,15 @@ void kmemcheck_hide_pages(struct page *p, unsigned int n)
 	for (i = 0; i < n; ++i) {
 		unsigned long address;
 		pte_t *pte;
-		unsigned int is_pte;
 
 		address = (unsigned long) page_address(&p[i]);
-		pte = lookup_address(address, &is_pte);
+		pte = lookup_address(address);
 		BUG_ON(!pte);
-		BUG_ON(!is_pte);
 
+		kmemcheck_handle_page(pte, address, 1);
 #if 0
-		set_pte(pte, __pte(pte_val(*pte) & ~_PAGE_PRESENT));
-		set_pte(pte, __pte(pte_val(*pte) | _PAGE_HIDDEN));
-#endif
 		flush_tlb_kernel_range(address, address + sizeof(unsigned long));
+#endif
 	}
 }
 

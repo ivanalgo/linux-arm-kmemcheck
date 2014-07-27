@@ -196,6 +196,10 @@ struct page {
 #ifdef LAST_CPUPID_NOT_IN_PAGE_FLAGS
 	int _last_cpupid;
 #endif
+
+#if defined(CONFIG_ARM) && defined(CONFIG_KMEMCHECK) && !defined(CONFIG_ARM_LPAE)
+	int kmemcheck_hidden;
+#endif
 }
 /*
  * The struct page can be forced to be double word aligned so that atomic ops
