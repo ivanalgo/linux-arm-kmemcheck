@@ -1,0 +1,3 @@
+kernel//home/ivan/kernel_git/linux/samples/kprobes/kprobe_example.ko
+kernel//home/ivan/kernel_git/linux/samples/kprobes/jprobe_example.ko
+kernel//home/ivan/kernel_git/linux/samples/kprobes/kretprobe_example.ko
