@@ -88,6 +88,12 @@ early_param("kmemcheck", param_kmemcheck);
 #ifndef CONFIG_ARM_LPAE
 static void kmemcheck_handle_page(pte_t *pte, unsigned long address, int hide)
 {
+	if (hide)
+		set_pte_ext(pte, pte_val(*pte) & (~L_PTE_PRESENT), 0);
+	else
+		set_pte_ext(pte, pte_val(*pte) | L_PTE_PRESENT, 0);
+
+	flush_tlb_kernel_range(address, address + sizeof(unsigned long));
 	pte_page(*pte)->kmemcheck_hidden = hide;
 }
 #else
@@ -102,9 +108,6 @@ int kmemcheck_show_addr(unsigned long address)
 		return 0;
 
 	kmemcheck_handle_page(pte, address, 1);
-#if 0
-	flush_tlb_kernel_range(address, address + sizeof(unsigned long));
-#endif
 	return 1;
 }
 
@@ -117,9 +120,6 @@ int kmemcheck_hide_addr(unsigned long address)
 		return 0;
 
 	kmemcheck_handle_page(pte, address, 0);
-#if 0
-	flush_tlb_kernel_range(address, address + sizeof(unsigned long));	
-#endif
 	return 1;
 }
 
@@ -285,9 +285,6 @@ void kmemcheck_show_pages(struct page *p, unsigned int n)
 		BUG_ON(!pte);
 
 		kmemcheck_handle_page(pte, address, 0);
-#if 0
-		flush_tlb_kernel_range(address, address + sizeof(unsigned long));
-#endif
 	}
 }
 
@@ -310,9 +307,6 @@ void kmemcheck_hide_pages(struct page *p, unsigned int n)
 		BUG_ON(!pte);
 
 		kmemcheck_handle_page(pte, address, 1);
-#if 0
-		flush_tlb_kernel_range(address, address + sizeof(unsigned long));
-#endif
 	}
 }
 
