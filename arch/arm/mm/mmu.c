@@ -1579,19 +1579,21 @@ int arch_split_huge_pmd(pmd_t *pmd, struct mm_struct *mm)
 	//unsigned long pfn = pmd_pfn(*pmd);
 	int i = 0;
 
-	pte = pte_alloc_one_kernel(&init_mm,  0); // FIXME??? 0?? */
+	pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
 	if (!pte)
 		return -ENOMEM;
 
 
 	next = pte;
 	do {
+		/* temp fix */
 		set_pte_ext(next, pfn_pte(pfn, mem_types[MT_MEMORY_RWX].prot_pte), 0);	
 		if (next == pte)
 			printk(KERN_ERR "*pte = %08lx\n", pte_val(*pte));
 	} while(next++, pfn++, ++i != PTRS_PER_PTE);
 
-	pmd_populate_kernel(&init_mm, pmd, pte);
+	/* temp fix */
+        __pmd_populate(pmd, __pa(pte), mem_types[MT_MEMORY_RWX].prot_l1);
 
 	return 0;
 }
