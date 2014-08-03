@@ -620,7 +620,7 @@ out:
 }
 
 bool kmemcheck_fault(struct pt_regs *regs, unsigned long address,
-	unsigned long error_code)
+	unsigned long fsr)
 {
 	pte_t *pte;
 
@@ -641,11 +641,11 @@ bool kmemcheck_fault(struct pt_regs *regs, unsigned long address,
 
 	WARN_ON_ONCE(in_nmi());
 
-	if (error_code & 2)
+	if (fsr & (1<<11)/* FSR_WRITE */)
 		kmemcheck_access(regs, address, KMEMCHECK_WRITE);
 	else
 		kmemcheck_access(regs, address, KMEMCHECK_READ);
-
+	while(1);
 	kmemcheck_show(regs);
 	return true;
 }

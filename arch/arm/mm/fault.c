@@ -25,6 +25,7 @@
 #include <asm/system_misc.h>
 #include <asm/system_info.h>
 #include <asm/tlbflush.h>
+#include <asm/kmemcheck.h>
 
 #include "fault.h"
 
@@ -273,6 +274,8 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	if (interrupts_enabled(regs))
 		local_irq_enable();
 
+	if (kmemcheck_fault(regs, addr, fsr))
+		return 0;
 	/*
 	 * If we're in an interrupt or have no user
 	 * context, we must not take the fault..
