@@ -29,6 +29,7 @@
 #include "shadow.h"
 #include "pte.h"
 #include "error.h"
+#include "insn.h"
 
 #ifdef CONFIG_KMEMCHECK_DISABLED_BY_DEFAULT
 #  define KMEMCHECK_ENABLED 0
@@ -107,7 +108,7 @@ int kmemcheck_show_addr(unsigned long address)
 	if (!pte)
 		return 0;
 
-	kmemcheck_handle_page(pte, address, 1);
+	kmemcheck_handle_page(pte, address, 0);
 	return 1;
 }
 
@@ -119,7 +120,7 @@ int kmemcheck_hide_addr(unsigned long address)
 	if (!pte)
 		return 0;
 
-	kmemcheck_handle_page(pte, address, 0);
+	kmemcheck_handle_page(pte, address, 1);
 	return 1;
 }
 
@@ -518,15 +519,13 @@ static void kmemcheck_copy(struct pt_regs *regs,
 		kmemcheck_enabled = 0;
 }
 
-enum kmemcheck_method {
-	KMEMCHECK_READ,
-	KMEMCHECK_WRITE,
-};
-
 static void kmemcheck_access(struct pt_regs *regs,
 	unsigned long fallback_address, enum kmemcheck_method fallback_method)
 {
-	unsigned int size = -1;
+	unsigned long addr = -1;
+	unsigned long size = -1;
+	unsigned long insn;
+	const struct kmemcheck_action *action;
 
 	struct kmemcheck_context *data = &__get_cpu_var(kmemcheck_context);
 
@@ -539,83 +538,32 @@ static void kmemcheck_access(struct pt_regs *regs,
 
 	data->busy = true;
 
-#if 0
-	insn = (const uint8_t *) regs->ip;
-	insn_primary = kmemcheck_opcode_get_primary(insn);
-
-	kmemcheck_opcode_decode(insn, &size);
-
-	switch (insn_primary[0]) {
-#ifdef CONFIG_KMEMCHECK_BITOPS_OK
-		/* AND, OR, XOR */
-		/*
-		 * Unfortunately, these instructions have to be excluded from
-		 * our regular checking since they access only some (and not
-		 * all) bits. This clears out "bogus" bitfield-access warnings.
-		 */
-	case 0x80:
-	case 0x81:
-	case 0x82:
-	case 0x83:
-		switch ((insn_primary[1] >> 3) & 7) {
-			/* OR */
-		case 1:
-			/* AND */
-		case 4:
-			/* XOR */
-		case 6:
-			kmemcheck_write(regs, fallback_address, size);
-			goto out;
-
-			/* ADD */
-		case 0:
-			/* ADC */
-		case 2:
-			/* SBB */
-		case 3:
-			/* SUB */
-		case 5:
-			/* CMP */
-		case 7:
-			break;
-		}
-		break;
-#endif
-
-		/* MOVS, MOVSB, MOVSW, MOVSD */
-	case 0xa4:
-	case 0xa5:
-		/*
-		 * These instructions are special because they take two
-		 * addresses, but we only get one page fault.
-		 */
-		kmemcheck_copy(regs, regs->si, regs->di, size);
-		goto out;
-
-		/* CMPS, CMPSB, CMPSW, CMPSD */
-	case 0xa6:
-	case 0xa7:
-		kmemcheck_read(regs, regs->si, size);
-		kmemcheck_read(regs, regs->di, size);
-		goto out;
+	insn = *(unsigned long *) regs->ARM_pc;
+	action = search_action_entry(insn);
+	if (!action) {
+		printk(KERN_ERR "Not support kmemcheck handle insn %08lx @ %08lx\n", insn, regs->ARM_pc);
+		while(1);
 	}
-#endif
 
-	/*
-	 * If the opcode isn't special in any way, we use the data from the
-	 * page fault handler to determine the address and type of memory
-	 * access.
-	 */
+	action->check(insn, regs, &addr, &size);
+
 	switch (fallback_method) {
 	case KMEMCHECK_READ:
 		kmemcheck_read(regs, fallback_address, size);
-		goto out;
+		break;
 	case KMEMCHECK_WRITE:
 		kmemcheck_write(regs, fallback_address, size);
-		goto out;
+		break;
 	}
 
-out:
+	kmemcheck_show(regs);
+
+	action->exec(insn, regs);
+
+	kmemcheck_hide(regs);
+
+	regs->ARM_pc += 4;
+
 	data->busy = false;
 }
 
@@ -645,8 +593,7 @@ bool kmemcheck_fault(struct pt_regs *regs, unsigned long address,
 		kmemcheck_access(regs, address, KMEMCHECK_WRITE);
 	else
 		kmemcheck_access(regs, address, KMEMCHECK_READ);
-	while(1);
-	kmemcheck_show(regs);
+
 	return true;
 }
 
