@@ -571,6 +571,7 @@ bool kmemcheck_fault(struct pt_regs *regs, unsigned long address,
 	unsigned long fsr)
 {
 	pte_t *pte;
+	unsigned long flags;
 
 	/*
 	 * ivan: FIXME: need to make sure check to non user_mode cause
@@ -589,10 +590,14 @@ bool kmemcheck_fault(struct pt_regs *regs, unsigned long address,
 
 	WARN_ON_ONCE(in_nmi());
 
+	local_irq_save(flags);
+
 	if (fsr & (1<<11)/* FSR_WRITE */)
 		kmemcheck_access(regs, address, KMEMCHECK_WRITE);
 	else
 		kmemcheck_access(regs, address, KMEMCHECK_READ);
+
+	local_irq_restore(flags);
 
 	return true;
 }
