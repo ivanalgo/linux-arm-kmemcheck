@@ -149,6 +149,37 @@ void strb_rpi_exec(unsigned long insn, struct pt_regs *regs)
 			     regs->uregs[rn] - regs->uregs[rm];
 }
 
+void ldrb_reg_check(unsigned long insn, struct pt_regs *regs,
+		    unsigned long *addr, unsigned long *size)
+{
+	unsigned long rn = insn_field_value(insn, 16, 19);
+	unsigned long rm = insn_field_value(insn,  0,  3);
+	unsigned long u  = insn_field_value(insn, 23, 23);
+	unsigned long b  = insn_field_value(insn, 22, 22);
+
+	*addr = u? regs->uregs[rn] + regs->uregs[rm] :
+		   regs->uregs[rn] - regs->uregs[rm];
+
+	*size = b? 1 : 4;
+}
+
+void ldrb_reg_exec(unsigned long insn, struct pt_regs *regs)
+{
+        unsigned long rn = insn_field_value(insn, 16, 19);
+        unsigned long rd = insn_field_value(insn, 12, 15);
+        unsigned long rm = insn_field_value(insn,  0,  3);
+        unsigned long u  = insn_field_value(insn, 23, 23);
+        unsigned long b  = insn_field_value(insn, 22, 22);
+	unsigned long addr = u? regs->uregs[rn] + regs->uregs[rm]:
+				regs->uregs[rn] - regs->uregs[rm];
+
+	if (b)
+		regs->uregs[rd] = *(unsigned char *)addr;
+	else
+		regs->uregs[rd] = *(unsigned long *)addr;
+	
+}
+
 struct kmemcheck_action arm_action_table[] = {
 	/* str{b} rd, [rn, #offset] */
 	{ .mask = 0x0f300000, .value = 0x05000000, KMEMCHECK_WRITE,
@@ -162,6 +193,10 @@ struct kmemcheck_action arm_action_table[] = {
 	/* stmia rn, {list} */
 	{ .mask = 0x0f900000, .value = 0x08800000, KMEMCHECK_WRITE,
 		.check = stmia_check, .exec = stmia_simulate },
+
+	/* ldr{b}, rd, [rn, rm] */
+	{ .mask = 0x0f300000, .value = 0x07100000, KMEMCHECK_READ,
+		.check = ldrb_reg_check, .exec = ldrb_reg_exec },
 
 };
 
