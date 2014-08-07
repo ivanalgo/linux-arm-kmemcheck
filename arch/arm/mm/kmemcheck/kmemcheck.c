@@ -87,7 +87,7 @@ static int __init param_kmemcheck(char *str)
 early_param("kmemcheck", param_kmemcheck);
 
 #ifndef CONFIG_ARM_LPAE
-static void kmemcheck_handle_page(pte_t *pte, unsigned long address, int hide)
+static void kmemcheck_handle_addr(pte_t *pte, unsigned long address, int hide)
 {
 	if (hide)
 		set_pte_ext(pte, pte_val(*pte) & (~L_PTE_PRESENT), 0);
@@ -95,6 +95,12 @@ static void kmemcheck_handle_page(pte_t *pte, unsigned long address, int hide)
 		set_pte_ext(pte, pte_val(*pte) | L_PTE_PRESENT, 0);
 
 	flush_tlb_kernel_range(address, address + sizeof(unsigned long));
+
+}
+
+static void kmemcheck_handle_page(pte_t *pte, unsigned long address, int hide)
+{
+	kmemcheck_handle_addr(pte, address, hide);
 	pte_page(*pte)->kmemcheck_hidden = hide;
 }
 #else
@@ -108,7 +114,7 @@ int kmemcheck_show_addr(unsigned long address)
 	if (!pte)
 		return 0;
 
-	kmemcheck_handle_page(pte, address, 0);
+	kmemcheck_handle_addr(pte, address, 0);
 	return 1;
 }
 
@@ -120,7 +126,7 @@ int kmemcheck_hide_addr(unsigned long address)
 	if (!pte)
 		return 0;
 
-	kmemcheck_handle_page(pte, address, 1);
+	kmemcheck_handle_addr(pte, address, 1);
 	return 1;
 }
 
@@ -244,6 +250,7 @@ void kmemcheck_hide(struct pt_regs *regs)
 		data->n_addrs = 0;
 		data->balance = 0;
 
+		return;
 #if 0
 		if (!(data->flags & X86_EFLAGS_TF))
 			regs->flags &= ~X86_EFLAGS_TF;
