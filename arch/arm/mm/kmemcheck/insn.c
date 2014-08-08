@@ -207,6 +207,35 @@ void strb_post_imm_exec(unsigned long insn, struct pt_regs *regs)
 	regs->uregs[rn] = u? regs->uregs[rn] + offset : regs->uregs[rn] - offset;
 }
 
+void ldrexb_check(unsigned long insn, struct pt_regs *regs,
+		  unsigned long *addr, unsigned long *size)
+{
+	unsigned long rn = insn_field_value(insn, 16, 19);
+	unsigned long b  = insn_field_value(insn, 22, 22);
+
+	*addr = regs->uregs[rn];
+	*size = b? 1 : 4;
+}
+
+void ldrexb_exec(unsigned long insn, struct pt_regs *regs)
+{
+	unsigned long rn = insn_field_value(insn, 16, 19);
+	unsigned long rt = insn_field_value(insn, 12, 15);
+	unsigned long b  = insn_field_value(insn, 22, 22);
+
+	if (b) {
+		__asm__ __volatile__("ldrexb %0, [%1]\n"
+		: "=&r" (regs->uregs[rt])
+		: "r" (regs->uregs[rn])
+		: "cc", "memory");
+	} else {
+		__asm__ __volatile__("ldrex %0, [%1]\n"
+		: "=&r" (regs->uregs[rt])
+		: "r" (regs->uregs[rn])
+		: "cc", "memory");
+	}
+}
+
 struct kmemcheck_action arm_action_table[] = {
 	/* str{b} rd, [rn, #offset] */
 	{ .mask = 0x0f300000, .value = 0x05000000, KMEMCHECK_WRITE,
@@ -227,6 +256,10 @@ struct kmemcheck_action arm_action_table[] = {
 	/* ldr{b}, rd, [rn, rm] */
 	{ .mask = 0x0f300000, .value = 0x07100000, KMEMCHECK_READ,
 		.check = ldrb_reg_check, .exec = ldrb_reg_exec },
+
+	/* ldrex{b} rt, [rn] */
+	{ .mask = 0x0fb00fff, .value = 0x01900f9f, KMEMCHECK_READ,
+		.check = ldrexb_check, .exec = ldrexb_exec },
 
 };
 
