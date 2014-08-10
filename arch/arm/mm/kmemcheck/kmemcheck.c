@@ -237,7 +237,7 @@ void kmemcheck_show(struct pt_regs *regs)
 /*
  * Called from the #DB handler.
  */
-void kmemcheck_hide(struct pt_regs *regs)
+void kmemcheck_hide(struct pt_regs *regs, int fail)
 {
 	struct kmemcheck_context *data = &__get_cpu_var(kmemcheck_context);
 	int n;
@@ -260,13 +260,16 @@ void kmemcheck_hide(struct pt_regs *regs)
 #endif
 	}
 
-	if (kmemcheck_enabled)
-		n = kmemcheck_hide_all();
-	else
-		n = kmemcheck_show_all();
+	/* if simulate/emulate fail, do not hide the address */
+	if (!fail) {
+		if (kmemcheck_enabled)
+			n = kmemcheck_hide_all();
+		else
+			n = kmemcheck_show_all();
 
-	if (n == 0)
-		return;
+		if (n == 0)
+			return;
+	}
 
 	--data->balance;
 
@@ -531,6 +534,7 @@ static void kmemcheck_access(struct pt_regs *regs,
 {
 	unsigned long addr = -1;
 	unsigned long size = -1;
+	int fail;
 	unsigned long insn;
 	const struct kmemcheck_action *action;
 
@@ -556,20 +560,20 @@ static void kmemcheck_access(struct pt_regs *regs,
 
 	switch (fallback_method) {
 	case KMEMCHECK_READ:
-		kmemcheck_read(regs, fallback_address, size);
+		kmemcheck_read(regs, addr, size);
 		break;
 	case KMEMCHECK_WRITE:
-		kmemcheck_write(regs, fallback_address, size);
+		kmemcheck_write(regs, addr, size);
 		break;
 	}
 
 	kmemcheck_show(regs);
 
-	action->exec(insn, regs);
+	fail = action->exec(insn, regs);
 
-	kmemcheck_hide(regs);
+	kmemcheck_hide(regs, fail);
 
-	regs->ARM_pc += 4;
+	regs->ARM_pc += fail? 0 : 4;
 
 	data->busy = false;
 }
@@ -615,7 +619,7 @@ bool kmemcheck_trap(struct pt_regs *regs)
 		return false;
 
 	/* We're done. */
-	kmemcheck_hide(regs);
+	kmemcheck_hide(regs, 0);
 	return true;
 }
 

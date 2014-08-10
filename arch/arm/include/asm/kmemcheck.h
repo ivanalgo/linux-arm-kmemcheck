@@ -8,7 +8,7 @@
 bool kmemcheck_active(struct pt_regs *regs);
 
 void kmemcheck_show(struct pt_regs *regs);
-void kmemcheck_hide(struct pt_regs *regs);
+void kmemcheck_hide(struct pt_regs *regs, int fail);
 
 bool kmemcheck_fault(struct pt_regs *regs,
 	unsigned long address, unsigned long error_code);

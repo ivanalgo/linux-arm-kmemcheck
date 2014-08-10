@@ -10,7 +10,7 @@ enum kmemcheck_method {
 
 typedef void (*action_check)(unsigned long insn, struct pt_regs *regs, 
 			unsigned long *addr, unsigned long *size);
-typedef void (*action_exec)(unsigned long insn, struct pt_regs *regs);
+typedef int (*action_exec)(unsigned long insn, struct pt_regs *regs);
 
 struct kmemcheck_action {
 	unsigned long mask;

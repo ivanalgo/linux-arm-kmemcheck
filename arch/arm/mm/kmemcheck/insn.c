@@ -40,7 +40,7 @@ void strbr_check(unsigned long insn, struct pt_regs *regs,
 	*size = b? 1 : 4;
 }
 
-void strb_exec(unsigned long insn, struct pt_regs *regs)
+int strb_exec(unsigned long insn, struct pt_regs *regs)
 {
         unsigned long rn = insn_field_value(insn, 16, 19);
 	unsigned long offset = insn_field_value(insn, 0, 11);
@@ -54,10 +54,10 @@ void strb_exec(unsigned long insn, struct pt_regs *regs)
 	else
 		*(unsigned long *)address = regs->uregs[rd];
 
-
+	return 0;
 }
 
-void strbr_exec(unsigned long insn, struct pt_regs *regs)
+int strbr_exec(unsigned long insn, struct pt_regs *regs)
 {
         unsigned long rn = insn_field_value(insn, 16, 19);
 	unsigned long rm = insn_field_value(insn, 0, 3);
@@ -72,6 +72,7 @@ void strbr_exec(unsigned long insn, struct pt_regs *regs)
 	else
 		*(unsigned long *)address = regs->uregs[rd];
 
+	return 0;
 }
 
 void stmia_check(unsigned long insn, struct pt_regs *regs,
@@ -95,7 +96,7 @@ void stmia_check(unsigned long insn, struct pt_regs *regs,
 
 }
 
-void stmia_simulate(unsigned long insn, struct pt_regs *regs)
+int stmia_simulate(unsigned long insn, struct pt_regs *regs)
 {
         unsigned long rn = insn_field_value(insn, 16, 19);
         unsigned long reglist = insn_field_value(insn, 0, 15);
@@ -120,6 +121,8 @@ void stmia_simulate(unsigned long insn, struct pt_regs *regs)
 
 	if (s)
 		BUG();
+
+	return 0;
 }
 
 void strb_rpi_check(unsigned long insn, struct pt_regs *regs,
@@ -132,7 +135,7 @@ void strb_rpi_check(unsigned long insn, struct pt_regs *regs,
 	*size = b? 1 : 4;
 }
 
-void strb_rpi_exec(unsigned long insn, struct pt_regs *regs)
+int strb_rpi_exec(unsigned long insn, struct pt_regs *regs)
 {
 	unsigned long rn = insn_field_value(insn, 16, 19);
 	unsigned long rd = insn_field_value(insn, 12, 15);
@@ -147,6 +150,8 @@ void strb_rpi_exec(unsigned long insn, struct pt_regs *regs)
 
 	regs->uregs[rn] = u? regs->uregs[rn] + regs->uregs[rm] :
 			     regs->uregs[rn] - regs->uregs[rm];
+
+	return 0;
 }
 
 void ldrb_reg_check(unsigned long insn, struct pt_regs *regs,
@@ -163,7 +168,7 @@ void ldrb_reg_check(unsigned long insn, struct pt_regs *regs,
 	*size = b? 1 : 4;
 }
 
-void ldrb_reg_exec(unsigned long insn, struct pt_regs *regs)
+int ldrb_reg_exec(unsigned long insn, struct pt_regs *regs)
 {
         unsigned long rn = insn_field_value(insn, 16, 19);
         unsigned long rd = insn_field_value(insn, 12, 15);
@@ -178,6 +183,7 @@ void ldrb_reg_exec(unsigned long insn, struct pt_regs *regs)
 	else
 		regs->uregs[rd] = *(unsigned long *)addr;
 	
+	return 0;
 }
 
 void strb_post_imm_check(unsigned long insn, struct pt_regs *regs,
@@ -190,7 +196,7 @@ void strb_post_imm_check(unsigned long insn, struct pt_regs *regs,
 	*size = b? 1 : 4;
 }
 
-void strb_post_imm_exec(unsigned long insn, struct pt_regs *regs)
+int strb_post_imm_exec(unsigned long insn, struct pt_regs *regs)
 {
         unsigned long rn = insn_field_value(insn, 16, 19);
         unsigned long rd = insn_field_value(insn, 12, 15);
@@ -205,6 +211,8 @@ void strb_post_imm_exec(unsigned long insn, struct pt_regs *regs)
 		*(unsigned long *)addr = regs->uregs[rd];
 
 	regs->uregs[rn] = u? regs->uregs[rn] + offset : regs->uregs[rn] - offset;
+
+	return 0;
 }
 
 void ldrexb_check(unsigned long insn, struct pt_regs *regs,
@@ -217,8 +225,9 @@ void ldrexb_check(unsigned long insn, struct pt_regs *regs,
 	*size = b? 1 : 4;
 }
 
-void ldrexb_exec(unsigned long insn, struct pt_regs *regs)
+int ldrexb_exec(unsigned long insn, struct pt_regs *regs)
 {
+#if 0
 	unsigned long rn = insn_field_value(insn, 16, 19);
 	unsigned long rt = insn_field_value(insn, 12, 15);
 	unsigned long b  = insn_field_value(insn, 22, 22);
@@ -234,6 +243,10 @@ void ldrexb_exec(unsigned long insn, struct pt_regs *regs)
 		: "r" (regs->uregs[rn])
 		: "cc", "memory");
 	}
+#endif
+
+	/* fail to emulate, so open this page for no tracing */
+	return 1;
 }
 
 struct kmemcheck_action arm_action_table[] = {
