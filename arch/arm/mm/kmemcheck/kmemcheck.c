@@ -31,6 +31,11 @@
 #include "error.h"
 #include "insn.h"
 
+enum kmemcheck_method {
+        KMEMCHECK_READ,
+        KMEMCHECK_WRITE,
+};
+
 #ifdef CONFIG_KMEMCHECK_DISABLED_BY_DEFAULT
 #  define KMEMCHECK_ENABLED 0
 #endif
