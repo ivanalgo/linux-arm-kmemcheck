@@ -309,20 +309,21 @@ int str_ldr_imm_exec(unsigned long insn, struct pt_regs *regs)
 
 	unsigned long size;
 	unsigned long addr;
+	unsigned long base;
 	
 
 	size = b? 1 : 4;
 	if (!u)
 		offset = -offset;
 
-	addr = regs->uregs[rn];
+	base = addr = regs->uregs[rn];
 	if (p)
 		addr += offset;
 
 	generic_single_register_access(&regs->uregs[rd], addr, size, l);
 
 	if(!p || w)
-		regs->uregs[rn] = addr;
+		regs->uregs[rn] = base + offset;
 
 	return 0;
 }
@@ -359,11 +360,12 @@ int str_ldr_reg_exec(unsigned long insn, struct pt_regs *regs)
 	int u  = insn_field_value(insn, 23, 23);
 	int p  = insn_field_value(insn, 24, 24);
 	unsigned long offset;
-	unsigned long addr;
 	unsigned long size;
+	unsigned long addr;
+	unsigned long base;
 
 	offset = regs->uregs[rm];
-	addr = regs->uregs[rn];
+	base = addr = regs->uregs[rn];
 
 	if (!u)
 		offset = -offset;
@@ -376,7 +378,7 @@ int str_ldr_reg_exec(unsigned long insn, struct pt_regs *regs)
 	generic_single_register_access(&regs->uregs[rd], addr, size, l);
 
 	if(!p || w)
-		regs->uregs[rn] = addr;		
+		regs->uregs[rn] = base + offset;		
 
 	return 0;
 }
