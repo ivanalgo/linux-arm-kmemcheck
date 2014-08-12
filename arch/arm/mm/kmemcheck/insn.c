@@ -284,10 +284,13 @@ void generic_single_register_access(unsigned long *reg, unsigned long addr,
 
 	switch(size) {
 	case 1:
-		*(unsigned char *)target = (unsigned char) copy;
+		*(u8 *)target = (u8) copy;
+		break;
+	case 2:
+		*(u16 *)target = (u16) copy;
 		break;
 	case 4:
-		*target = copy;
+		*(u32 *)target = (u32) copy;
 		break;
 	default:
 		BUG();
@@ -383,6 +386,152 @@ int str_ldr_reg_exec(unsigned long insn, struct pt_regs *regs)
 	return 0;
 }
 
+void strh_ldrh_imm_check(unsigned long insn, struct pt_regs *regs,
+			 unsigned long *addr, unsigned long *size)
+{
+	int rn = insn_field_value(insn, 16, 19);
+	unsigned long imm = insn_field_value(insn, 8, 11) << 4
+			  | insn_field_value(insn, 0,  3);
+	int u = insn_field_value(insn, 23, 23);
+	int p = insn_field_value(insn, 24, 24);	
+
+	if (!u)
+		imm = -imm;
+
+	*addr = regs->uregs[rn];
+	if (p)
+		*addr += imm;
+
+	*size = 2;
+}
+
+int strh_ldrh_imm_exec(unsigned long insn, struct pt_regs *regs)
+{
+	int rn = insn_field_value(insn, 16, 19);
+	int rt = insn_field_value(insn, 12, 15);
+	unsigned long imm = insn_field_value(insn, 8, 11) << 4
+			  | insn_field_value(insn, 0,  3);
+	int u = insn_field_value(insn, 23, 23);
+	int l = insn_field_value(insn, 20, 20);
+	int w = insn_field_value(insn, 21, 21);
+	int p = insn_field_value(insn, 24, 24);
+
+	unsigned long addr;
+	unsigned long base;
+
+	base = addr = regs->uregs[rn];
+	
+	if (!u)
+		imm = -imm;
+
+	if (p)
+		addr += imm;
+
+	generic_single_register_access(&regs->uregs[rt], addr, 2, l);
+
+	if (!p || w)
+		regs->uregs[rn] = base + imm;
+
+	return 0;
+}
+
+unsigned long calc_scale_offset(unsigned long left, int shift,
+			        unsigned long right, unsigned long carray)
+{
+	unsigned long offset = 0;
+
+	switch(shift) {
+	case 0x0: /* Logic Shift Left */
+		offset = left << right;
+		break;
+
+	case 0x1: /* Logic Shift Right */
+		if (!right)
+			right = 32;
+		offset = left >> right;
+		break;
+
+	case 0x2: /* ASR */
+		if (!right)
+			right = 32;
+		offset = ((signed long)left) >> right;
+		break;
+
+	case 0x3: /* ROR or RRX */
+		if (!right) { /* RRX */
+			carray = !!carray;
+			offset = (carray << 31) | (left >> 1);
+		} else {
+			offset = (left >> shift) | (left << (32 - shift)); 
+		}
+		break;
+	default:
+		BUG();	
+	}
+
+	return offset;
+}
+
+void str_ldr_scale_reg_check(unsigned long insn, struct pt_regs *regs,
+			     unsigned long *addr, unsigned long *size)
+{
+	int rn = insn_field_value(insn, 16, 19);
+	int rm = insn_field_value(insn,  0,  3);
+	unsigned long shift_imm = insn_field_value(insn, 7, 11);
+	unsigned int  shift = insn_field_value(insn, 5, 6);
+	int b = insn_field_value(insn, 22, 22);
+	int u = insn_field_value(insn, 23, 23);
+	int p = insn_field_value(insn,24, 24);
+
+	unsigned long offset = calc_scale_offset(regs->uregs[rm], shift,
+					shift_imm, regs->ARM_cpsr & (1 << 29));
+
+	if (!u)
+		offset = -offset;
+
+	*addr = regs->uregs[rn];
+	if (p)
+		*addr += offset;
+
+	*size = b? 1 : 4;
+}
+
+int str_ldr_scale_reg_exec(unsigned long insn, struct pt_regs *regs)
+{
+	int rn = insn_field_value(insn, 16, 19);
+	int rm = insn_field_value(insn,  0,  3);
+	int rd = insn_field_value(insn, 12, 15);
+	unsigned long shift_imm = insn_field_value(insn, 7, 11);
+	unsigned int  shift = insn_field_value(insn, 5, 6);
+	int b = insn_field_value(insn, 22, 22);
+	int u = insn_field_value(insn, 23, 23);
+	int l = insn_field_value(insn, 20, 20);
+	int p = insn_field_value(insn, 24, 24);
+	int w = insn_field_value(insn, 21, 21);
+
+	unsigned long offset = calc_scale_offset(regs->uregs[rm], shift,
+					shift_imm, regs->ARM_cpsr & (1 << 29));
+	unsigned long addr;
+	unsigned long base;
+	unsigned long size;
+
+	base = addr = regs->uregs[rn];
+
+	if (!u)
+		offset = -offset;
+
+	if (p)
+		addr += offset;
+
+	size = b? 1 : 4;
+
+	generic_single_register_access(&regs->uregs[rd], addr, size, l);
+
+	if (!p || w)
+		regs->uregs[rn] = base + offset;
+
+	return 0;
+}
 
 struct kmemcheck_action arm_action_table[] = {
 	/* str/ldr imm offset/index */
@@ -392,6 +541,14 @@ struct kmemcheck_action arm_action_table[] = {
 	/* str/ldr register offset/index */
 	{ .mask = 0x0e000ff0, .value = 0x06000000,
 		.check = str_ldr_reg_check, .exec = str_ldr_reg_exec },
+
+	/* strh/ldrh imm offset/indx */
+	{ .mask = 0x0e4000f0, .value = 0x004000b0,
+		.check = strh_ldrh_imm_check, .exec = strh_ldrh_imm_exec },
+
+	/* str/ldr scaled register offset/index */
+	{ .mask = 0x0e000010, .value = 0x06000000,
+		.check = str_ldr_scale_reg_check, .exec = str_ldr_scale_reg_exec },
 #if 0
 	/* str{b} rd, [rn, #offset] */
 	{ .mask = 0x0f300000, .value = 0x05000000, KMEMCHECK_WRITE,
