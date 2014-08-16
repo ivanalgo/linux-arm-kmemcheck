@@ -271,30 +271,37 @@ void str_ldr_imm_check(unsigned long insn, struct pt_regs *regs,
 void generic_single_register_access(unsigned long *reg, unsigned long addr,
 				    unsigned long size, int load)
 {
-	unsigned long copy;
-	unsigned long *target;
 
 	if (load) {
-		copy = *(unsigned long *)addr;
-		target = reg;
+		switch(size) {
+		case 1:
+			*reg = *(u8 *)addr;
+			break;
+		case 2:
+			*reg = *(u16 *)addr;
+			break;
+		case 4:
+			*reg = *(u32 *)addr;
+			break;
+		default:
+			BUG();
+			break;
+		}
 	} else {
-		copy = *reg;
-		target = (unsigned long *)addr;
-	}
-
-	switch(size) {
-	case 1:
-		*(u8 *)target = (u8) copy;
-		break;
-	case 2:
-		*(u16 *)target = (u16) copy;
-		break;
-	case 4:
-		*(u32 *)target = (u32) copy;
-		break;
-	default:
-		BUG();
-		break;
+		switch(size) {
+		case 1:
+			*(u8 *)addr = *reg;
+			break;
+		case 2:
+			*(u16 *)addr = *reg;
+			break;
+		case 4:
+			*(u32 *)addr = *reg;
+			break;
+		default:
+			BUG();
+			break;
+		}
 	}
 
 }
