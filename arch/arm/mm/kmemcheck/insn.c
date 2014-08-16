@@ -75,6 +75,20 @@ int strbr_exec(unsigned long insn, struct pt_regs *regs)
 	return 0;
 }
 
+static inline int reglist_bits(unsigned long reglist)
+{
+	int cnt = 0;
+
+	while(reglist) {
+		if (reglist & 1)
+			cnt++;
+
+		reglist >>= 1;
+	}
+
+	return cnt;
+}
+
 void stmia_check(unsigned long insn, struct pt_regs *regs,
 		 unsigned long *addr, unsigned long *size)
 {
@@ -588,6 +602,152 @@ int strh_ldrh_reg_exec(unsigned long insn, struct pt_regs *regs)
 	return 0;
 }
 
+void stm_ldm_check(unsigned long insn, struct pt_regs *regs,
+		   unsigned long *addr, unsigned long *size)
+{
+	int rn = insn_field_value(insn, 16, 19);
+	unsigned long reglist = insn_field_value(insn, 0, 15);
+	int u = insn_field_value(insn, 23, 23);
+	int p = insn_field_value(insn, 24, 24);
+
+	int bits =  reglist_bits(reglist);
+
+	if (u) {
+		if (p) {
+			/* IB */
+			*addr = regs->uregs[rn] + 4;
+		} else {
+			/* IA */
+			*addr = regs->uregs[rn];
+		}
+	} else {
+		if (p) {
+			/* DB */
+			*addr = regs->uregs[rn] - bits * 4;
+		} else {
+			/* DA */
+			*addr = regs->uregs[rn] - bits * 4 + 4;
+		}
+	}
+
+	*size = 4 * bits;
+}
+
+void generic_mult_registers_access(unsigned long addr, struct pt_regs *regs,
+				   unsigned long reglist, int l)
+{
+	int i;
+
+	if (l) {
+		for (i = 0; i < 16; ++i) {
+			if (reglist & (1 << i)) {
+				regs->uregs[i] = *(u32 *)addr;
+				addr += 4;
+			}
+		}
+	} else {
+		for (i = 0; i < 16; ++i) {
+			if (reglist & (1 << i)) {
+				*(u32 *)addr = regs->uregs[i];
+				addr += 4;
+			}
+		}
+	}
+}
+
+int stm_ldm_exec(unsigned long insn, struct pt_regs *regs)
+{
+	int rn = insn_field_value(insn, 16, 19);
+	unsigned long reglist = insn_field_value(insn, 0, 15);
+	int u = insn_field_value(insn, 23, 23);
+	int p = insn_field_value(insn, 24, 24);
+	int w = insn_field_value(insn, 21, 21);
+	int l = insn_field_value(insn, 20, 20);
+
+	int bits = reglist_bits(reglist);
+	unsigned long addr;
+	unsigned long write;
+
+        if (u) {
+                if (p) {
+                        /* IB */
+                        addr = regs->uregs[rn] + 4;
+			write = regs->uregs[rn] + bits * 4;
+                } else {
+                        /* IA */
+                        addr = regs->uregs[rn];
+			write = regs->uregs[rn] + bits * 4;
+                }
+        } else {
+                if (p) {
+                        /* DB */
+                        addr = regs->uregs[rn] - bits * 4;
+			write = regs->uregs[rn] - bits * 4;
+                } else {
+                        /* DA */
+                        addr = regs->uregs[rn] - bits * 4 + 4;
+			write = regs->uregs[rn] - bits * 4;
+                }
+        }
+
+	generic_mult_registers_access(addr, regs, reglist, l);
+
+	if (w)
+		regs->uregs[rn] = write;
+
+	return 0;
+}
+
+void strd_ldrd_imm_check(unsigned long insn, struct pt_regs *regs,
+			 unsigned long *addr, unsigned long *size)
+{
+	int rn = insn_field_value(insn, 16, 19);
+	unsigned imm = (insn_field_value(insn, 8, 11) << 4)
+			| insn_field_value(insn, 0, 3);
+	int u = insn_field_value(insn, 23, 23);
+	int p = insn_field_value(insn, 24, 24);
+
+	if (!u)
+		imm = -imm;
+
+	*addr = regs->uregs[rn];
+	if (p)
+		*addr += imm;
+
+	*size = 8;
+}
+
+int strd_ldrd_imm_exec(unsigned long insn, struct pt_regs *regs)
+{
+	int rn = insn_field_value(insn, 16, 19);
+	int rd = insn_field_value(insn, 12, 15);
+	unsigned imm = (insn_field_value(insn, 8, 11) << 4)
+			| insn_field_value(insn, 0, 3);
+	int u = insn_field_value(insn, 23, 23);
+	int p = insn_field_value(insn, 24, 24);
+	int w = insn_field_value(insn, 21, 21);
+	int l = insn_field_value(insn, 20, 20);
+
+	unsigned long addr;
+	unsigned long base;
+
+	base = addr = regs->uregs[rn];
+
+	if (!u)
+		imm = -imm;
+
+	if (p)
+		addr += imm;
+
+	generic_single_register_access(&regs->uregs[rd], addr, 4, l);
+	generic_single_register_access(&regs->uregs[rd + 1], addr + 4, 4, l);
+
+	if (!p || w)
+		regs->uregs[rn] = base + imm;
+
+	return 0;
+}
+
 struct kmemcheck_action arm_action_table[] = {
 	/* str/ldr imm offset/index */
 	{ .mask = 0x0e000000, .value = 0x04000000, 
@@ -608,6 +768,14 @@ struct kmemcheck_action arm_action_table[] = {
 	/* str/ldr scaled register offset/index */
 	{ .mask = 0x0e000010, .value = 0x06000000,
 		.check = str_ldr_scale_reg_check, .exec = str_ldr_scale_reg_exec },
+
+	/* stm/ldm */
+	{ .mask = 0x0e000000, .value = 0x08000000,
+		.check = stm_ldm_check, .exec = stm_ldm_exec },
+
+	/* strd/ldrd imm offset/index */
+	{ .mask = 0x0e4000f0, .value = 0x004000f0,
+		.check = strd_ldrd_imm_check, .exec = strd_ldrd_imm_exec },
 #if 0
 	/* str{b} rd, [rn, #offset] */
 	{ .mask = 0x0f300000, .value = 0x05000000, KMEMCHECK_WRITE,
@@ -625,9 +793,11 @@ struct kmemcheck_action arm_action_table[] = {
 	{ .mask = 0x0f300000, .value = 0x07100000, KMEMCHECK_READ,
 		.check = ldrb_reg_check, .exec = ldrb_reg_exec },
 #endif
+#if 0
 	/* stmia rn, {list} */
 	{ .mask = 0x0f900000, .value = 0x08800000,
 		.check = stmia_check, .exec = stmia_simulate },
+#endif
 
 
 	/* ldrex{b} rt, [rn] */
