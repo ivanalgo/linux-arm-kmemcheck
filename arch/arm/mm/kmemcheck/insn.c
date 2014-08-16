@@ -748,6 +748,56 @@ int strd_ldrd_imm_exec(unsigned long insn, struct pt_regs *regs)
 	return 0;
 }
 
+void strd_ldrd_reg_check(unsigned long insn, struct pt_regs *regs,
+			 unsigned long *addr, unsigned long *size)
+{
+	int rn = insn_field_value(insn, 16, 19);
+	int rm = insn_field_value(insn,  0,  3);
+	int u  = insn_field_value(insn, 23, 23);
+	int p  = insn_field_value(insn, 24, 24);
+
+	unsigned long offset = regs->uregs[rm];
+	if (!u)
+		offset = -offset;
+
+	*addr = regs->uregs[rn];
+	if (p)
+		*addr += offset;
+
+	*size = 8;
+}
+
+int strd_ldrd_reg_exec(unsigned long insn, struct pt_regs *regs)
+{
+	int rn = insn_field_value(insn, 16, 19);
+	int rm = insn_field_value(insn,  0,  3);
+	int rd = insn_field_value(insn, 12, 15);
+	int u  = insn_field_value(insn, 23, 23);
+	int p  = insn_field_value(insn, 24, 24);
+	int w  = insn_field_value(insn, 21, 21);
+	int l  = insn_field_value(insn, 20, 20);
+
+	unsigned long addr;
+	unsigned long base;
+	unsigned long offset = regs->uregs[rm];
+
+	base = addr = regs->uregs[rn];
+
+	if (!u)
+		offset = -offset;
+
+	if (p)
+		addr += offset;
+
+	generic_single_register_access(&regs->uregs[rd], addr, 4, l);
+	generic_single_register_access(&regs->uregs[rd + 1], addr + 4, 4, l);
+
+	if (!p || w)
+		regs->uregs[rn] = base + offset;
+
+	return 0;
+}
+
 struct kmemcheck_action arm_action_table[] = {
 	/* str/ldr imm offset/index */
 	{ .mask = 0x0e000000, .value = 0x04000000, 
@@ -776,6 +826,10 @@ struct kmemcheck_action arm_action_table[] = {
 	/* strd/ldrd imm offset/index */
 	{ .mask = 0x0e4000f0, .value = 0x004000f0,
 		.check = strd_ldrd_imm_check, .exec = strd_ldrd_imm_exec },
+
+	/* strd/ldrd regiset offset/index */
+	{ .mask = 0x0e400ff0, .value = 0x000000f0,
+		.check = strd_ldrd_reg_check, .exec = strd_ldrd_reg_exec },
 #if 0
 	/* str{b} rd, [rn, #offset] */
 	{ .mask = 0x0f300000, .value = 0x05000000, KMEMCHECK_WRITE,
