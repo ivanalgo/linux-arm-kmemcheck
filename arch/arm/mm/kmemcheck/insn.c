@@ -726,7 +726,7 @@ int strd_ldrd_imm_exec(unsigned long insn, struct pt_regs *regs)
 	int u = insn_field_value(insn, 23, 23);
 	int p = insn_field_value(insn, 24, 24);
 	int w = insn_field_value(insn, 21, 21);
-	int l = !insn_field_value(insn,  6,  6); /* bit 6 means str */
+	int l = !insn_field_value(insn,  5,  5); /* bit 5 means str */
 
 	unsigned long addr;
 	unsigned long base;
@@ -775,7 +775,7 @@ int strd_ldrd_reg_exec(unsigned long insn, struct pt_regs *regs)
 	int u  = insn_field_value(insn, 23, 23);
 	int p  = insn_field_value(insn, 24, 24);
 	int w  = insn_field_value(insn, 21, 21);
-	int l  = insn_field_value(insn, 20, 20);
+	int l  = !insn_field_value(insn,  5,  5); /* bit 5 means str */
 
 	unsigned long addr;
 	unsigned long base;
@@ -824,11 +824,11 @@ struct kmemcheck_action arm_action_table[] = {
 		.check = stm_ldm_check, .exec = stm_ldm_exec },
 
 	/* strd/ldrd imm offset/index */
-	{ .mask = 0x0e4000d0, .value = 0x004000d0,
+	{ .mask = 0x0e5000d0, .value = 0x004000d0,
 		.check = strd_ldrd_imm_check, .exec = strd_ldrd_imm_exec },
 
 	/* strd/ldrd regiset offset/index */
-	{ .mask = 0x0e400ff0, .value = 0x000000f0,
+	{ .mask = 0x0e500fd0, .value = 0x000000d0,
 		.check = strd_ldrd_reg_check, .exec = strd_ldrd_reg_exec },
 #if 0
 	/* str{b} rd, [rn, #offset] */
