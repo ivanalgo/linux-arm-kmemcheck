@@ -1,8 +1,68 @@
 #include <linux/kernel.h>
 #include <linux/bug.h>
+#include <linux/sort.h>
+#include <asm/traps.h>
 
 #include "insn.h"
+#include "../kernel/patch.h"
 
+extern struct kmemcheck_entry  __start__kmemcheck_table[];
+extern struct kmemcheck_entry  __stop__kmemcheck_table[];
+extern int kmemcheck_trap_handler(struct pt_regs *regs, unsigned int insn);
+
+static struct undef_hook kmemcheck_arm_break_hook = {
+        .instr_mask     = 0x0fffffff,
+        .instr_val      = KMEMCHECK_ARM_BREAKPOINT_INSTRUCTION,
+        .cpsr_mask      = MODE_MASK,
+        .cpsr_val       = SVC_MODE,
+        .fn             = kmemcheck_trap_handler,
+};
+
+static int cmp_entry(const void *a, const void *b)
+{
+	const struct kmemcheck_entry *x = a, *y = b;
+
+	if (x->ldrex_start > y->ldrex_start)
+		return 1;
+	if (x->ldrex_start < y->ldrex_start)
+		return -1;
+	return 0;
+}
+
+void __init sort_kmemcheck_table(void)
+{
+        if (__stop__kmemcheck_table > __start__kmemcheck_table) {
+                pr_notice("Sorting kmemcheck_table...\n");
+		sort(__start__kmemcheck_table, __stop__kmemcheck_table - __start__kmemcheck_table,
+			sizeof(struct kmemcheck_entry), cmp_entry, NULL);
+        }
+}
+
+void __init init_kmemcheck_trap(void)
+{
+	register_undef_hook(&kmemcheck_arm_break_hook);
+}
+
+const struct kmemcheck_entry *
+search_kmemcheck_table(unsigned long addr)
+{
+	const struct kmemcheck_entry *first = __start__kmemcheck_table;
+	const struct kmemcheck_entry *last  = __stop__kmemcheck_table;
+
+	while(first <= last) {
+		const struct kmemcheck_entry *mid;
+
+		mid = ((last - first) >> 1) + first;
+		if (mid->ldrex_start < addr)
+			first = mid + 1;
+		else if (mid->ldrex_start > addr)
+			last = mid - 1;
+		else
+			return mid;
+	}
+
+	return NULL;
+}
 static unsigned long insn_field_value(unsigned long insn, int fstart, int fend)
 {
 	return (insn >> fstart) & ((1 << (fend - fstart + 1)) - 1);
@@ -241,25 +301,27 @@ void ldrexb_check(unsigned long insn, struct pt_regs *regs,
 
 int ldrexb_exec(unsigned long insn, struct pt_regs *regs)
 {
-#if 0
+	const struct kmemcheck_entry *entry;
+
+	entry = search_kmemcheck_table(regs->ARM_pc);
+	if (!entry)
+		return 1;
+
+	regs->ARM_pc = entry->fixup_start;
+	return 2; /* partial */
+}
+
+void ldrexd_check(unsigned long insn, struct pt_regs *regs,
+		  unsigned long *addr, unsigned long *size)
+{
 	unsigned long rn = insn_field_value(insn, 16, 19);
-	unsigned long rt = insn_field_value(insn, 12, 15);
-	unsigned long b  = insn_field_value(insn, 22, 22);
 
-	if (b) {
-		__asm__ __volatile__("ldrexb %0, [%1]\n"
-		: "=&r" (regs->uregs[rt])
-		: "r" (regs->uregs[rn])
-		: "cc", "memory");
-	} else {
-		__asm__ __volatile__("ldrex %0, [%1]\n"
-		: "=&r" (regs->uregs[rt])
-		: "r" (regs->uregs[rn])
-		: "cc", "memory");
-	}
-#endif
+	*addr = regs->uregs[rn];
+	*size = 8;
+}
 
-	/* fail to emulate, so open this page for no tracing */
+int ldrexd_exec(unsigned long insn, struct pt_regs *regs)
+{
 	return 1;
 }
 
@@ -857,6 +919,10 @@ struct kmemcheck_action arm_action_table[] = {
 	/* ldrex{b} rt, [rn] */
 	{ .mask = 0x0fb00fff, .value = 0x01900f9f, 
 		.check = ldrexb_check, .exec = ldrexb_exec },
+
+	/* ldrexd rt, r<t+1>, [rn] */
+	{ .mask = 0x0ff00fff, .value = 0x01b00f9f,
+		.check = ldrexd_check, .exec = ldrexd_exec },
 
 };
 

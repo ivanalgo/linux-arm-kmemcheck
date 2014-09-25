@@ -91,6 +91,7 @@ static int __init param_kmemcheck(char *str)
 
 early_param("kmemcheck", param_kmemcheck);
 
+
 #ifndef CONFIG_ARM_LPAE
 static void kmemcheck_handle_addr(pte_t *pte, unsigned long address, int hide)
 {
@@ -265,7 +266,7 @@ void kmemcheck_hide(struct pt_regs *regs, int fail)
 #endif
 	}
 
-	/* if simulate/emulate fail, do not hide the address */
+	/* if simulate/emulate fail or partial, do not hide the address */
 	if (!fail) {
 		if (kmemcheck_enabled)
 			n = kmemcheck_hide_all();
@@ -276,9 +277,12 @@ void kmemcheck_hide(struct pt_regs *regs, int fail)
 			return;
 	}
 
-	--data->balance;
 
-	data->n_addrs = 0;
+	/* simulate partial, don't clear the address */
+	if (fail != 2) {
+		--data->balance;
+		data->n_addrs = 0;
+	}
 
 #if 0
 	if (!(data->flags & X86_EFLAGS_TF))
@@ -577,6 +581,10 @@ static void kmemcheck_access(struct pt_regs *regs,
 	fail = action->exec(insn, regs);
 
 	kmemcheck_hide(regs, fail);
+	if (fail == 1) {
+		printk("show address %lx because can't simulate instruction %lx@%lx\n",
+			addr, *(unsigned long *)regs->ARM_pc, regs->ARM_pc);
+	}
 
 	regs->ARM_pc += fail? 0 : 4;
 
@@ -618,14 +626,17 @@ bool kmemcheck_fault(struct pt_regs *regs, unsigned long address,
 	return true;
 }
 
-bool kmemcheck_trap(struct pt_regs *regs)
+int kmemcheck_trap_handler(struct pt_regs *regs, unsigned int insn)
 {
 	if (!kmemcheck_active(regs))
-		return false;
+		return 1;
 
 	/* We're done. */
 	kmemcheck_hide(regs, 0);
-	return true;
+	/* execute next instruction which will jump back to ldrex/strex */
+	regs->ARM_pc += 4;
+
+	return 0;
 }
 
 

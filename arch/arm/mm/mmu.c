@@ -1394,7 +1394,6 @@ static void __init map_lowmem(void)
 			end = arm_lowmem_limit;
 		if (start >= end)
 			break;
-		printk("Yongting: mapping %08lx - %08lx\n", start, end);
 #if 0
 		if (end > kernel_end) {
 			if (start >= kernel_end) {
@@ -1460,7 +1459,12 @@ static void __init map_lowmem(void)
 			}
 		}
 
+		extern void sort_kmemcheck_table(void);
+		extern void init_kmemcheck_trap(void);
+
 		set_kernel_mapping_4k(__va(kernel_end), __va(mem_end));
+		sort_kmemcheck_table();
+		init_kmemcheck_trap();
 	}
 }
 

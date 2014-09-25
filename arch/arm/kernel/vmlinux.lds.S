@@ -104,6 +104,9 @@ SECTIONS
 #ifdef CONFIG_MMU
 			*(.fixup)
 #endif
+#ifdef CONFIG_KMEMCHECK
+			*(.kmemcheck_fixup)
+#endif
 			*(.gnu.warning)
 			*(.glue_7)
 			*(.glue_7t)
@@ -137,6 +140,18 @@ SECTIONS
 		__start_unwind_tab = .;
 		*(.ARM.extab*)
 		__stop_unwind_tab = .;
+	}
+#endif
+
+#ifdef CONFIG_KMEMCHECK
+	/*
+	 * kmemcheck ldrex/strex instruction tables
+	 */
+	. = ALIGN(8);
+	.ARM.kmemcheck : {
+		__start__kmemcheck_table = .;
+		*(.kmemcheck_table)
+		__stop__kmemcheck_table = .;
 	}
 #endif
 
