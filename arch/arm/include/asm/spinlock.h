@@ -104,11 +104,26 @@ static inline int arch_spin_trylock(arch_spinlock_t *lock)
 	prefetchw(&lock->slock);
 	do {
 		__asm__ __volatile__(
-		"	ldrex	%0, [%3]\n"
+		"1:	ldrex	%0, [%3]\n"
 		"	mov	%2, #0\n"
 		"	subs	%1, %0, %0, ror #16\n"
 		"	addeq	%0, %0, %4\n"
 		"	strexeq	%2, %0, [%3]\n"
+		"2:\n"
+		"	.section .kmemcheck_fixup, \"ax\"\n"
+		"3:	ldrex   %0, [%3]\n"
+		"	mov     %2, #0\n"
+		"	subs    %1, %0, %0, ror #16\n"
+		"	addeq   %0, %0, %4\n"
+		"	strexeq %2, %0, [%3]\n"
+			KMEMCHECK_BREAK_INSN
+		"	b	2b\n"
+		"	.previous\n"
+		"	.section .kmemcheck_table, \"a\"\n"
+		"	.align	2\n"
+		"	.long	1b\n"
+		"	.long	3b\n"
+		"	.previous\n"
 		: "=&r" (slock), "=&r" (contended), "=&r" (res)
 		: "r" (&lock->slock), "I" (1 << TICKET_SHIFT)
 		: "cc");
@@ -166,6 +181,22 @@ static inline void arch_write_lock(arch_rwlock_t *rw)
 "	strexeq	%0, %2, [%1]\n"
 "	teq	%0, #0\n"
 "	bne	1b\n"
+"2:\n"
+"	.section .kmemcheck_fixup, \"ax\"\n"
+"3:	ldrex   %0, [%1]\n"
+"	teq     %0, #0\n"
+	WFE("ne")
+"	strexeq %0, %2, [%1]\n"
+"	teq     %0, #0\n"
+"	bne     3b\n"
+	KMEMCHECK_BREAK_INSN
+"	b 2b\n"
+"	.previous\n"
+"	.section .kmemcheck_table, \"a\"\n"
+"	.align	2\n"
+"	.long	1b\n"
+"	.long	3b\n"
+"	.previous\n"
 	: "=&r" (tmp)
 	: "r" (&rw->lock), "r" (0x80000000)
 	: "cc");
@@ -180,10 +211,24 @@ static inline int arch_write_trylock(arch_rwlock_t *rw)
 	prefetchw(&rw->lock);
 	do {
 		__asm__ __volatile__(
-		"	ldrex	%0, [%2]\n"
+		"1:	ldrex	%0, [%2]\n"
 		"	mov	%1, #0\n"
 		"	teq	%0, #0\n"
 		"	strexeq	%1, %3, [%2]\n"
+		"2:\n"
+		"	.section .kmemcheck_fixup, \"ax\"\n"
+		"3:	ldrex   %0, [%2]\n"
+		"	mov     %1, #0\n"
+		"	teq     %0, #0\n"
+		"	strexeq %1, %3, [%2]\n"
+			KMEMCHECK_BREAK_INSN
+		"	b	2b\n"
+		"	.previous\n"
+		"	.section .kmemcheck_table, \"a\"\n"
+		"	.align	2\n"
+		"	.long	1b\n"
+		"	.long	3b\n"
+		"	.previous\n"
 		: "=&r" (contended), "=&r" (res)
 		: "r" (&rw->lock), "r" (0x80000000)
 		: "cc");
@@ -237,6 +282,22 @@ static inline void arch_read_lock(arch_rwlock_t *rw)
 	WFE("mi")
 "	rsbpls	%0, %1, #0\n"
 "	bmi	1b\n"
+"2:\n"
+"	.section .kmemcheck_fixup, \"ax\"\n"
+"3:	ldrex   %0, [%2]\n"
+"	adds    %0, %0, #1\n"
+"	strexpl %1, %0, [%2]\n"
+	WFE("mi")
+"	rsbpls  %0, %1, #0\n"
+"	bmi     3b\n"
+	KMEMCHECK_BREAK_INSN
+"	b	2b\n"
+"	.previous\n"
+"	.section .kmemcheck_table, \"a\"\n"
+"	.align	2\n"
+"	.long	1b\n"
+"	.long	3b\n"
+"	.previous\n"
 	: "=&r" (tmp), "=&r" (tmp2)
 	: "r" (&rw->lock)
 	: "cc");
@@ -257,6 +318,21 @@ static inline void arch_read_unlock(arch_rwlock_t *rw)
 "	strex	%1, %0, [%2]\n"
 "	teq	%1, #0\n"
 "	bne	1b\n"
+"2:\n"
+"	.section .kmemcheck_fixup, \"ax\"\n"
+"3:	ldrex   %0, [%2]\n"
+"	sub     %0, %0, #1\n"
+"	strex   %1, %0, [%2]\n"
+"	teq     %1, #0\n"
+"	bne     3b\n"
+	KMEMCHECK_BREAK_INSN
+"	b	2b\n"
+"	.previous\n"
+"	.section .kmemcheck_table, \"a\"\n"
+"	.align	2\n"
+"	.long	1b\n"
+"	.long	3b\n"
+"	.previous\n"
 	: "=&r" (tmp), "=&r" (tmp2)
 	: "r" (&rw->lock)
 	: "cc");
@@ -272,10 +348,24 @@ static inline int arch_read_trylock(arch_rwlock_t *rw)
 	prefetchw(&rw->lock);
 	do {
 		__asm__ __volatile__(
-		"	ldrex	%0, [%2]\n"
+		"1:	ldrex	%0, [%2]\n"
 		"	mov	%1, #0\n"
 		"	adds	%0, %0, #1\n"
 		"	strexpl	%1, %0, [%2]\n"
+		"2:\n"
+		"	.section .kmemcheck_fixup, \"ax\"\n"
+		"3:	ldrex	%0, [%2]\n"
+		"	mov     %1, #0\n"
+		"	adds    %0, %0, #1\n"
+		"	strexpl %1, %0, [%2]\n"
+			KMEMCHECK_BREAK_INSN
+		"	b	2b\n"
+		"	.previous\n"
+		"	.section .kmemcheck_table, \"a\"\n"
+		"	.align	2\n"
+		"	.long	1b\n"
+		"	.long	3b\n"
+		"	.previous\n"
 		: "=&r" (contended), "=&r" (res)
 		: "r" (&rw->lock)
 		: "cc");

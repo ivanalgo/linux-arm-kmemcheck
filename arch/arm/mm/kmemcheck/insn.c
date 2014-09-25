@@ -4,7 +4,6 @@
 #include <asm/traps.h>
 
 #include "insn.h"
-#include "../kernel/patch.h"
 
 extern struct kmemcheck_entry  __start__kmemcheck_table[];
 extern struct kmemcheck_entry  __stop__kmemcheck_table[];
