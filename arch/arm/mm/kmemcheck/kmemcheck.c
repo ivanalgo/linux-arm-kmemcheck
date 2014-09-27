@@ -284,12 +284,13 @@ void kmemcheck_hide(struct pt_regs *regs, int fail)
 		data->n_addrs = 0;
 	}
 
-#if 0
-	if (!(data->flags & X86_EFLAGS_TF))
-		regs->flags &= ~X86_EFLAGS_TF;
-	if (data->flags & X86_EFLAGS_IF)
-		regs->flags |= X86_EFLAGS_IF;
-#endif
+	data->flags = regs->ARM_cpsr;
+	/* if simulate partial, mask interrupt */
+	if (fail == 2) {
+		regs->ARM_cpsr |= IRQMASK_I_BIT;
+	} else if (!(data->flags & IRQMASK_I_BIT)) {
+		regs->ARM_cpsr &= ~IRQMASK_I_BIT;
+	}
 }
 
 void kmemcheck_show_pages(struct page *p, unsigned int n)
