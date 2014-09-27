@@ -7,15 +7,6 @@
 
 extern struct kmemcheck_entry  __start__kmemcheck_table[];
 extern struct kmemcheck_entry  __stop__kmemcheck_table[];
-extern int kmemcheck_trap_handler(struct pt_regs *regs, unsigned int insn);
-
-static struct undef_hook kmemcheck_arm_break_hook = {
-        .instr_mask     = 0x0fffffff,
-        .instr_val      = KMEMCHECK_ARM_BREAKPOINT_INSTRUCTION,
-        .cpsr_mask      = MODE_MASK,
-        .cpsr_val       = SVC_MODE,
-        .fn             = kmemcheck_trap_handler,
-};
 
 static int cmp_entry(const void *a, const void *b)
 {
@@ -35,11 +26,6 @@ void __init sort_kmemcheck_table(void)
 		sort(__start__kmemcheck_table, __stop__kmemcheck_table - __start__kmemcheck_table,
 			sizeof(struct kmemcheck_entry), cmp_entry, NULL);
         }
-}
-
-void __init init_kmemcheck_trap(void)
-{
-	register_undef_hook(&kmemcheck_arm_break_hook);
 }
 
 const struct kmemcheck_entry *
@@ -306,8 +292,77 @@ int ldrexb_exec(unsigned long insn, struct pt_regs *regs)
 	if (!entry)
 		return 1;
 
-	regs->ARM_pc = entry->fixup_start;
-	return 2; /* partial */
+#if 1
+	{
+		register unsigned int r0 asm("r0") = regs->ARM_r0;
+		register unsigned int r1 asm("r1") = regs->ARM_r1;
+		register unsigned int r2 asm("r2") = regs->ARM_r2;
+		register unsigned int r3 asm("r3") = regs->ARM_r3;
+		register unsigned int r4 asm("r4") = regs->ARM_r4;
+		register unsigned int r5 asm("r5") = regs->ARM_r5;
+		register unsigned int r6 asm("r6") = regs->ARM_r6;
+		register unsigned int r7 asm("r7") = regs->ARM_r7;
+		register unsigned int r8 asm("r8") = regs->ARM_r8;
+		register unsigned int r9 asm("r9") = regs->ARM_r9;
+		register unsigned int r10 asm("r10") = regs->ARM_r10;
+
+		__asm__ __volatile__ (
+			"blx	%[func]\n"
+			: "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3), "=r"(r4),
+			  "=r"(r5), "=r"(r6), "=r"(r7), "=r"(r8), "=r"(r9),
+			  "=r"(r10)
+			: "0"(r0), "1"(r1), "2"(r2), "3"(r3), "4"(r4), "5"(r5),
+			  "6"(r6), "7"(r7), "8"(r8), "9"(r9), "10"(r10),
+			  [func] "r" (entry->fixup_start)
+			: "lr", "cc"
+		);
+
+		regs->ARM_r0 = r0;
+		regs->ARM_r1 = r1;
+		regs->ARM_r2 = r2;
+		regs->ARM_r3 = r3;
+		regs->ARM_r4 = r4;
+		regs->ARM_r5 = r5;
+		regs->ARM_r6 = r6;
+		regs->ARM_r7 = r7;
+		regs->ARM_r8 = r8;
+		regs->ARM_r9 = r9;
+		regs->ARM_r10 = r10;
+	}
+#else
+		__asm__	__volatile__ (
+		"	mov	r0, %[r0]\n"
+		"	mov	r1, %[r1]\n"
+		"	mov	r2, %[r2]\n"
+		"	mov	r3, %[r3]\n"
+		"	mov	r4, %[r4]\n"
+		"	mov	r5, %[r5]\n"
+		"	mov	r6, %[r6]\n"
+		"	mov	r7, %[r7]\n"
+		"	mov	r8, %[r8]\n"
+		"	mov	r9, %[r9]\n"
+		"	mov	r10, %[r10]\n"
+		"	blx	%[func]\n"
+		:
+		: [r0] "r" (regs->ARM_r0),
+		  [r1] "r" (regs->ARM_r1),	
+		  [r2] "r" (regs->ARM_r2),	
+		  [r3] "r" (regs->ARM_r3),	
+		  [r4] "r" (regs->ARM_r4),	
+		  [r5] "r" (regs->ARM_r5),	
+		  [r6] "r" (regs->ARM_r6),	
+		  [r7] "r" (regs->ARM_r7),	
+		  [r8] "r" (regs->ARM_r8),	
+		  [r9] "r" (regs->ARM_r9),	
+		  [r10] "r" (regs->ARM_r10),
+		  [func] "r" (entry->fixup_start)
+		: "lr", "cc"
+		);
+	}
+#endif
+
+	regs->ARM_pc = entry->ldrex_next - 4;
+	return 0;
 }
 
 void ldrexd_check(unsigned long insn, struct pt_regs *regs,
