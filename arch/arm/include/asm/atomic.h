@@ -17,6 +17,7 @@
 #include <linux/irqflags.h>
 #include <asm/barrier.h>
 #include <asm/cmpxchg.h>
+#include <asm/kmemcheck.h>
 
 #define ATOMIC_INIT(i)	{ (i) }
 
@@ -48,7 +49,16 @@ static inline void atomic_add(int i, atomic_t *v)
 "	add	%0, %0, %4\n"
 "	strex	%1, %0, [%3]\n"
 "	teq	%1, #0\n"
-"	bne	1b"
+"	bne	1b\n"
+"2:\n"
+	KMEMCHECK_FIXUP(
+"3:	ldrex   %0, [%3]\n"
+"       add     %0, %0, %4\n"
+"       strex   %1, %0, [%3]\n"
+"       teq     %1, #0\n"
+"       bne     3b\n",
+	2b)
+	KMEMCHECK_TABLE(1b, 3b)
 	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)
 	: "r" (&v->counter), "Ir" (i)
 	: "cc");
@@ -67,7 +77,16 @@ static inline int atomic_add_return(int i, atomic_t *v)
 "	add	%0, %0, %4\n"
 "	strex	%1, %0, [%3]\n"
 "	teq	%1, #0\n"
-"	bne	1b"
+"	bne	1b\n"
+"2:\n"
+	KMEMCHECK_FIXUP(
+"3:     ldrex   %0, [%3]\n"
+"       add     %0, %0, %4\n"
+"       strex   %1, %0, [%3]\n"
+"       teq     %1, #0\n"
+"       bne     3b\n",
+	2b)
+	KMEMCHECK_TABLE(1b, 3b)
 	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)
 	: "r" (&v->counter), "Ir" (i)
 	: "cc");
@@ -88,7 +107,16 @@ static inline void atomic_sub(int i, atomic_t *v)
 "	sub	%0, %0, %4\n"
 "	strex	%1, %0, [%3]\n"
 "	teq	%1, #0\n"
-"	bne	1b"
+"	bne	1b\n"
+"2:\n"
+	KMEMCHECK_FIXUP(
+"3:	ldrex   %0, [%3]\n"
+"       sub     %0, %0, %4\n"
+"       strex   %1, %0, [%3]\n"
+"       teq     %1, #0\n"
+"       bne     3b\n",
+	2b)
+	KMEMCHECK_TABLE(1b, 3b)
 	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)
 	: "r" (&v->counter), "Ir" (i)
 	: "cc");
@@ -107,7 +135,16 @@ static inline int atomic_sub_return(int i, atomic_t *v)
 "	sub	%0, %0, %4\n"
 "	strex	%1, %0, [%3]\n"
 "	teq	%1, #0\n"
-"	bne	1b"
+"	bne	1b\n"
+"2:\n"
+	KMEMCHECK_FIXUP(
+"3:     ldrex   %0, [%3]\n"
+"       sub     %0, %0, %4\n"
+"       strex   %1, %0, [%3]\n"
+"       teq     %1, #0\n"
+"       bne     3b\n",
+	2b)
+	KMEMCHECK_TABLE(1b, 3b)
 	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)
 	: "r" (&v->counter), "Ir" (i)
 	: "cc");
@@ -127,10 +164,18 @@ static inline int atomic_cmpxchg(atomic_t *ptr, int old, int new)
 
 	do {
 		__asm__ __volatile__("@ atomic_cmpxchg\n"
-		"ldrex	%1, [%3]\n"
-		"mov	%0, #0\n"
-		"teq	%1, %4\n"
-		"strexeq %0, %5, [%3]\n"
+		"1:	ldrex	%1, [%3]\n"
+		"	mov	%0, #0\n"
+		"	teq	%1, %4\n"
+		"	strexeq %0, %5, [%3]\n"
+		"2:\n"
+		KMEMCHECK_FIXUP(
+		"3:	ldrex  %1, [%3]\n"
+                "	mov    %0, #0\n"
+                "	teq    %1, %4\n"
+                "	strexeq %0, %5, [%3]\n",
+		2b)
+		KMEMCHECK_TABLE(1b, 3b)
 		    : "=&r" (res), "=&r" (oldval), "+Qo" (ptr->counter)
 		    : "r" (&ptr->counter), "Ir" (old), "r" (new)
 		    : "cc");
@@ -157,7 +202,18 @@ static inline int __atomic_add_unless(atomic_t *v, int a, int u)
 "	strex	%2, %1, [%4]\n"
 "	teq	%2, #0\n"
 "	bne	1b\n"
-"2:"
+"2:\n"
+	KMEMCHECK_FIXUP(
+"3:     ldrex   %0, [%4]\n"
+"       teq     %0, %5\n"
+"       beq     4f\n"
+"       add     %1, %0, %6\n"
+"       strex   %2, %1, [%4]\n"
+"       teq     %2, #0\n"
+"       bne     3b\n"
+"4:\n",
+	2b)
+	KMEMCHECK_TABLE(1b, 3b)
 	: "=&r" (oldval), "=&r" (newval), "=&r" (tmp), "+Qo" (v->counter)
 	: "r" (&v->counter), "r" (u), "r" (a)
 	: "cc");

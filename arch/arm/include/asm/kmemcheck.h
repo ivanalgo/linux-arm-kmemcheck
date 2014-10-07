@@ -16,6 +16,22 @@ bool kmemcheck_trap(struct pt_regs *regs);
 
 #define KMEMCHECK_BREAK_INSN 	".word 0x07f002f8\n"
 
+#define KMEMCHECK_FIXUP(insns, back)		\
+"\n 	@ kmemcheck_fixup\n"			\
+"	.section .kmemcheck_fixup, \"ax\"\n"	\
+insns						\
+"	b	" #back	"\n"			\
+KMEMCHECK_BREAK_INSN				\
+"	.previous\n"
+
+#define KMEMCHECK_TABLE(orgin, fixup)		\
+"\n 	@ kmemcheck_table\n"			\
+"	.section .kmemcheck_table, \"a\"\n"	\
+"	.align	2\n"				\
+"	.long	" #orgin "\n"			\
+"	.long	" #fixup "\n"			\
+"	.previous\n"
+
 #else
 static inline bool kmemcheck_active(struct pt_regs *regs)
 {
