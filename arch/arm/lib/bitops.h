@@ -21,6 +21,23 @@ UNWIND(	.fnstart	)
 	strex	r0, r2, [r1]
 	cmp	r0, #0
 	bne	1b
+#ifdef CONFIG_KMEMCHECK
+2:
+	.section .kmemcheck_fixup, "ax"
+3:	ldrex   r2, [r1]
+	\instr  r2, r2, r3
+	strex   r0, r2, [r1]
+	cmp     r0, #0
+	bne	3b
+	.word 0x07f002f8
+	b	2b
+	.previous
+	.section .kmemcheck_table, "a"
+	.align	2
+	.long	1b
+	.long	3b
+	.previous
+#endif
 	bx	lr
 UNWIND(	.fnend		)
 ENDPROC(\name		)
