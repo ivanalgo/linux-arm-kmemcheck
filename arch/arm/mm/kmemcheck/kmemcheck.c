@@ -266,7 +266,7 @@ void kmemcheck_hide(struct pt_regs *regs, int fail)
 #endif
 	}
 
-	/* if simulate/emulate fail, do not hide the address */
+	/* if simulate/emulate fail or partial, do not hide the address */
 	if (!fail) {
 		if (kmemcheck_enabled)
 			n = kmemcheck_hide_all();
@@ -278,8 +278,19 @@ void kmemcheck_hide(struct pt_regs *regs, int fail)
 	}
 
 
-	--data->balance;
-	data->n_addrs = 0;
+	/* simulate partial, don't clear the address */
+	if (fail != 2) {
+		--data->balance;
+		data->n_addrs = 0;
+	}
+
+	data->flags = regs->ARM_cpsr;
+	/* if simulate partial, mask interrupt */
+	if (fail == 2) {
+		regs->ARM_cpsr |= IRQMASK_I_BIT;
+	} else if (!(data->flags & IRQMASK_I_BIT)) {
+		regs->ARM_cpsr &= ~IRQMASK_I_BIT;
+	}
 }
 
 void kmemcheck_show_pages(struct page *p, unsigned int n)
@@ -616,21 +627,18 @@ bool kmemcheck_fault(struct pt_regs *regs, unsigned long address,
 	return true;
 }
 
-#if 0
 int kmemcheck_trap_handler(struct pt_regs *regs, unsigned int insn)
 {
-#warning "FIXME: kmemcheck_active"
-#if 0
 	if (!kmemcheck_active(regs))
 		return 1;
-#endif
 
+	/* We're done. */
+	kmemcheck_hide(regs, 0);
 	/* execute next instruction which will jump back to ldrex/strex */
 	regs->ARM_pc += 4;
 
 	return 0;
 }
-#endif
 
 
 

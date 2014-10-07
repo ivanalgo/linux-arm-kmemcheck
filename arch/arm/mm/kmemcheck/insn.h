@@ -20,7 +20,6 @@ const struct kmemcheck_action *search_action_entry(unsigned  long insn);
 struct kmemcheck_entry {
 	unsigned long ldrex_start;
 	unsigned long fixup_start;
-	unsigned long ldrex_next;
 };
 
 #define KMEMCHECK_ARM_BREAKPOINT_INSTRUCTION	0x07f002f8

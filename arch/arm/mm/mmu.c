@@ -1464,6 +1464,7 @@ static void __init map_lowmem(void)
 
 		set_kernel_mapping_4k(__va(kernel_end), __va(mem_end));
 		sort_kmemcheck_table();
+		init_kmemcheck_trap();
 	}
 }
 

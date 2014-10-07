@@ -14,6 +14,8 @@ bool kmemcheck_fault(struct pt_regs *regs,
 	unsigned long address, unsigned long error_code);
 bool kmemcheck_trap(struct pt_regs *regs);
 
+#define KMEMCHECK_BREAK_INSN 	".word 0x07f002f8\n"
+
 #else
 static inline bool kmemcheck_active(struct pt_regs *regs)
 {
