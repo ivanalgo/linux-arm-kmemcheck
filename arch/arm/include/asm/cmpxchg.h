@@ -4,6 +4,7 @@
 #include <linux/irqflags.h>
 #include <linux/prefetch.h>
 #include <asm/barrier.h>
+#include <asm/kmemcheck.h>
 
 #if defined(CONFIG_CPU_SA1100) || defined(CONFIG_CPU_SA110)
 /*
@@ -45,7 +46,15 @@ static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size
 		"1:	ldrexb	%0, [%3]\n"
 		"	strexb	%1, %2, [%3]\n"
 		"	teq	%1, #0\n"
-		"	bne	1b"
+		"	bne	1b\n"
+		"2:\n"
+		KMEMCHECK_FIXUP(
+		"3:	ldrexb  %0, [%3]\n"
+		"	strexb  %1, %2, [%3]\n"
+		"	teq     %1, #0\n"
+		"	ben	3b\n",
+		2b)
+		KMEMCHECK_TABLE(1b, 3b)
 			: "=&r" (ret), "=&r" (tmp)
 			: "r" (x), "r" (ptr)
 			: "memory", "cc");
@@ -55,7 +64,15 @@ static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size
 		"1:	ldrex	%0, [%3]\n"
 		"	strex	%1, %2, [%3]\n"
 		"	teq	%1, #0\n"
-		"	bne	1b"
+		"	bne	1b\n"
+		"2:\n"
+		KMEMCHECK_FIXUP(
+		"3:	ldrex   %0, [%3]\n"
+		"	strex   %1, %2, [%3]\n"
+		"	teq     %1, #0\n"
+		"	bne	3b\n",
+		2b)
+		KMEMCHECK_TABLE(1b, 3b)
 			: "=&r" (ret), "=&r" (tmp)
 			: "r" (x), "r" (ptr)
 			: "memory", "cc");
@@ -147,10 +164,18 @@ static inline unsigned long __cmpxchg(volatile void *ptr, unsigned long old,
 	case 1:
 		do {
 			asm volatile("@ __cmpxchg1\n"
-			"	ldrexb	%1, [%2]\n"
+			"1:	ldrexb	%1, [%2]\n"
 			"	mov	%0, #0\n"
 			"	teq	%1, %3\n"
 			"	strexbeq %0, %4, [%2]\n"
+			"2:\n"
+			KMEMCHECK_FIXUP(
+			"3:	ldrexb  %1, [%2]\n"
+			"	mov     %0, #0\n"
+			"	teq     %1, %3\n"
+			"	strexbeq %0, %4, [%2]\n",
+			2b)
+			KMEMCHECK_TABLE(1b, 3b)
 				: "=&r" (res), "=&r" (oldval)
 				: "r" (ptr), "Ir" (old), "r" (new)
 				: "memory", "cc");
@@ -159,10 +184,18 @@ static inline unsigned long __cmpxchg(volatile void *ptr, unsigned long old,
 	case 2:
 		do {
 			asm volatile("@ __cmpxchg1\n"
-			"	ldrexh	%1, [%2]\n"
+			"1:	ldrexh	%1, [%2]\n"
 			"	mov	%0, #0\n"
 			"	teq	%1, %3\n"
 			"	strexheq %0, %4, [%2]\n"
+			"2:\n"
+			KMEMCHECK_FIXUP(
+			"3:	ldrexh  %1, [%2]\n"
+			"	mov     %0, #0\n"
+			"	teq     %1, %3\n"
+			"	strexheq %0, %4, [%2]\n",
+			2b)
+			KMEMCHECK_TABLE(1b, 3b)
 				: "=&r" (res), "=&r" (oldval)
 				: "r" (ptr), "Ir" (old), "r" (new)
 				: "memory", "cc");
@@ -172,10 +205,18 @@ static inline unsigned long __cmpxchg(volatile void *ptr, unsigned long old,
 	case 4:
 		do {
 			asm volatile("@ __cmpxchg4\n"
-			"	ldrex	%1, [%2]\n"
+			"1:	ldrex	%1, [%2]\n"
 			"	mov	%0, #0\n"
 			"	teq	%1, %3\n"
 			"	strexeq %0, %4, [%2]\n"
+			"2:\n"
+			KMEMCHECK_FIXUP(
+			"3:	ldrex   %1, [%2]\n"
+			"	mov     %0, #0\n"
+			"	teq     %1, %3\n"
+			"	strexeq %0, %4, [%2]\n",
+			2b)
+			KMEMCHECK_TABLE(1b, 3b)
 				: "=&r" (res), "=&r" (oldval)
 				: "r" (ptr), "Ir" (old), "r" (new)
 				: "memory", "cc");
@@ -245,6 +286,17 @@ static inline unsigned long long __cmpxchg64(unsigned long long *ptr,
 "	teq		%0, #0\n"
 "	bne		1b\n"
 "2:"
+	KMEMCHECK_FIXUP(
+"3:	ldrexd          %1, %H1, [%3]\n"
+"	teq             %1, %4\n"
+"	teqeq           %H1, %H4\n"
+"	bne             4f\n"
+"	strexd          %0, %5, %H5, [%3]\n"
+"	teq             %0, #0\n"
+"	bne		3b\n"
+"4:\n",
+	2b)
+	KMEMCHECK_TABLE(1b, 3b)
 	: "=&r" (res), "=&r" (oldval), "+Qo" (*ptr)
 	: "r" (ptr), "r" (old), "r" (new)
 	: "cc");
