@@ -135,7 +135,8 @@ void kmemcheck_error_recall(void)
 #if 0
 	__show_regs(&e->regs, 1);
 #endif
-	print_stack_trace(&e->trace, 0);
+#warning "FIXME: should take this statment affect!"
+	//print_stack_trace(&e->trace, 0);
 }
 
 static void do_wakeup(unsigned long data)

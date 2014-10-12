@@ -629,8 +629,9 @@ bool kmemcheck_fault(struct pt_regs *regs, unsigned long address,
 
 int kmemcheck_trap_handler(struct pt_regs *regs, unsigned int insn)
 {
-	if (!kmemcheck_active(regs))
-		return 1;
+#warning "FIXME: should fix the kmemcheck_active"
+//	if (!kmemcheck_active(regs))
+//		return 1;
 
 	/* We're done. */
 	kmemcheck_hide(regs, 0);

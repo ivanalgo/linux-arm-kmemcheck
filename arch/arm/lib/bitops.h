@@ -68,7 +68,28 @@ UNWIND(	.fnstart	)
 	smp_dmb
 	cmp	r0, #0
 	movne	r0, #1
-2:	bx	lr
+#ifdef CONFIG_KMEMCHECK
+2:
+	.section .kmemcheck_fixup, "ax"
+3:	ldrex   r2, [r1]
+	ands    r0, r2, r3		@ save old value of bit
+	\instr  r2, r2, r3              @ toggle bit
+	strex   ip, r2, [r1]
+	cmp     ip, #0
+	bne     3b
+	smp_dmb
+	cmp	r0, #0
+	movne	r0, #1
+	.word	0x07f002f8
+	b	2b
+	.previous
+	.section .kmemcheck_table, "a"
+	.align	2
+	.long	1b
+	.long	3b
+	.previous
+#endif
+	bx	lr
 UNWIND(	.fnend		)
 ENDPROC(\name		)
 	.endm
